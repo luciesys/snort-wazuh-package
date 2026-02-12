@@ -1,0 +1,60 @@
+---
+- name: "📦 Installation Agent Wazuh"
+  hosts: wazuh_agents
+  become: yes
+  
+  vars:
+    wazuh_version: "4.7"
+    manager_ip: "{{ wazuh_manager_ip }}"
+
+  tasks:
+    - name: "📋 Début installation agent"
+      debug:
+        msg: "Installation agent sur {{ inventory_hostname }} → Manager: {{ manager_ip }}"
+
+    - name: "🔄 Mise à jour APT"
+      apt:
+        update_cache: yes
+
+    - name: "📦 Installer dépendances"
+      apt:
+        name:
+          - curl
+          - gnupg
+          - apt-transport-https
+        state: present
+
+    - name: "📥 Ajouter clé GPG Wazuh"
+      apt_key:
+        url: https://packages.wazuh.com/key/GPG-KEY-WAZUH
+        state: present
+
+    - name: "📥 Ajouter dépôt Wazuh"
+      apt_repository:
+        repo: "deb https://packages.wazuh.com/4.x/apt/ stable main"
+        state: present
+        filename: wazuh
+
+    - name: "📦 Installer agent"
+      apt:
+        name: wazuh-agent
+        state: present
+      environment:
+        WAZUH_MANAGER: "{{ manager_ip }}"
+
+    - name: "⚙️ Configurer Manager"
+      lineinfile:
+        path: /var/ossec/etc/ossec.conf
+        regexp: '<address>.*</address>'
+        line: "      <address>{{ manager_ip }}</address>"
+        backrefs: yes
+
+    - name: "🚀 Démarrer agent"
+      systemd:
+        name: wazuh-agent
+        enabled: yes
+        state: restarted
+
+    - name: "✅ Terminé"
+      debug:
+        msg: "Agent installé sur {{ inventory_hostname }}"
