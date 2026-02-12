@@ -1,0 +1,114 @@
+---
+- name: "🛡️ Installation SIEM (Snort + Wazuh)"
+  hosts: siem_servers
+  become: yes
+  
+  vars:
+    wazuh_version: "4.7"
+    min_ram_gb: 4
+    min_disk_gb: 30
+
+  tasks:
+    - name: "📋 Début installation"
+      debug:
+        msg: "Installation SIEM sur {{ inventory_hostname }}"
+
+    - name: "🔍 Vérifier l'OS"
+      assert:
+        that:
+          - ansible_distribution in ['Ubuntu', 'Debian']
+        fail_msg: "OS non supporté"
+
+    - name: "🧹 Arrêter anciens services"
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - wazuh-manager
+        - wazuh-indexer
+        - wazuh-dashboard
+        - snort
+      ignore_errors: yes
+
+    - name: "🧹 Supprimer anciens paquets"
+      apt:
+        name:
+          - wazuh-manager
+          - wazuh-indexer
+          - wazuh-dashboard
+          - snort
+        state: absent
+        purge: yes
+      ignore_errors: yes
+
+    - name: "🔄 Mise à jour système"
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: "📦 Installer dépendances"
+      apt:
+        name:
+          - curl
+          - wget
+          - gnupg
+          - apt-transport-https
+          - net-tools
+        state: present
+
+    - name: "🌐 Corriger DNS"
+      copy:
+        content: |
+          nameserver 8.8.8.8
+          nameserver 8.8.4.4
+        dest: /etc/resolv.conf
+
+    - name: "🔍 Installer Snort"
+      apt:
+        name: snort
+        state: present
+      ignore_errors: yes
+
+    - name: "🔍 Configurer Snort"
+      lineinfile:
+        path: /etc/snort/snort.conf
+        regexp: '^(ipvar|var) HOME_NET'
+        line: "ipvar HOME_NET {{ ansible_default_ipv4.network }}/24"
+      ignore_errors: yes
+
+    - name: "🔍 Créer logs Snort"
+      file:
+        path: /var/log/snort
+        state: directory
+        mode: '0755'
+
+    - name: "📥 Télécharger Wazuh"
+      get_url:
+        url: "https://packages.wazuh.com/{{ wazuh_version }}/wazuh-install.sh"
+        dest: /tmp/wazuh-install.sh
+        mode: '0755'
+
+    - name: "🚀 Installer Wazuh (10-20 min)"
+      command: bash /tmp/wazuh-install.sh -a -i
+      args:
+        creates: /var/ossec/bin/wazuh-control
+      async: 1800
+      poll: 30
+
+    - name: "🔗 Intégrer Snort-Wazuh"
+      blockinfile:
+        path: /var/ossec/etc/ossec.conf
+        insertbefore: '</ossec_config>'
+        block: |
+          <localfile>
+            <log_format>snort-full</log_format>
+            <location>/var/log/snort/alert</location>
+          </localfile>
+      ignore_errors: yes
+
+    - name: "✅ Terminé"
+      debug:
+        msg: |
+          Installation terminée !
+          Dashboard: https://{{ ansible_default_ipv4.address }}
+          User: admin
