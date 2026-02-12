@@ -1,0 +1,53 @@
+---
+- name: "🗑️ Désinstallation SIEM"
+  hosts: siem_servers
+  become: yes
+
+  tasks:
+    - name: "⚠️ Désinstallation en cours"
+      debug:
+        msg: "Suppression SIEM sur {{ inventory_hostname }}"
+
+    - name: "🛑 Arrêter services"
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - snort
+        - wazuh-manager
+        - wazuh-indexer
+        - wazuh-dashboard
+        - filebeat
+      ignore_errors: yes
+
+    - name: "🗑️ Supprimer paquets"
+      apt:
+        name:
+          - snort
+          - wazuh-manager
+          - wazuh-indexer
+          - wazuh-dashboard
+          - filebeat
+        state: absent
+        purge: yes
+      ignore_errors: yes
+
+    - name: "🗑️ Supprimer répertoires"
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/ossec
+        - /etc/wazuh-indexer
+        - /var/lib/wazuh-indexer
+        - /etc/snort
+        - /var/log/snort
+
+    - name: "🧹 Nettoyer APT"
+      apt:
+        autoremove: yes
+        autoclean: yes
+
+    - name: "✅ Terminé"
+      debug:
+        msg: "SIEM supprimé de {{ inventory_hostname }}"
