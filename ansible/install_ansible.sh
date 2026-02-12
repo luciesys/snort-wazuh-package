@@ -109,68 +109,29 @@ cd ~/ansible-siem
 
 # Créer le fichier inventory.ini d'exemple
 cat > inventory.ini << 'EOF'
-#===============================================================================
-# INVENTORY - Liste des serveurs cibles
-#===============================================================================
-#
-# COMMENT UTILISER :
-# 1. Remplace les IP par celles de tes serveurs
-# 2. Remplace 'ton_user' par ton nom d'utilisateur SSH
-# 3. Remplace 'ton_password' par ton mot de passe SSH
-#
-# EXEMPLE :
-#   Si ton serveur est 192.168.1.100 avec user 'admin' et password '1234'
-#   → 192.168.1.100 ansible_user=admin ansible_password=1234
-#
-#===============================================================================
-
 [siem_servers]
-# Serveurs où installer Snort + Wazuh (serveur complet)
-# Décommente et modifie la ligne suivante :
-# 192.168.1.100 ansible_user=ton_user ansible_password=ton_password
+# 192.168.1.100 ansible_user=admin ansible_password=password
 
 [wazuh_agents]
-# Machines où installer seulement l'agent Wazuh
-# Décommente et modifie les lignes suivantes :
-# 192.168.1.101 ansible_user=ton_user ansible_password=ton_password
-# 192.168.1.102 ansible_user=ton_user ansible_password=ton_password
+# 192.168.1.101 ansible_user=admin ansible_password=password
 
 [all:vars]
-# Variables globales
 ansible_python_interpreter=/usr/bin/python3
 ansible_ssh_common_args='-o StrictHostKeyChecking=no'
 EOF
 
 # Créer le fichier ansible.cfg
 cat > ansible.cfg << 'EOF'
-#===============================================================================
-# CONFIGURATION ANSIBLE
-#===============================================================================
-
 [defaults]
-# Fichier d'inventaire par défaut
 inventory = inventory.ini
-
-# Ne pas vérifier les clés SSH (pratique pour les nouvelles machines)
 host_key_checking = False
-
-# Utilisateur distant par défaut
 remote_user = root
-
-# Timeout de connexion
 timeout = 30
-
-# Nombre de machines en parallèle
 forks = 5
-
-# Ne pas créer de fichiers .retry
 retry_files_enabled = False
-
-# Couleurs dans le terminal
 force_color = True
 
 [privilege_escalation]
-# Utiliser sudo automatiquement
 become = True
 become_method = sudo
 become_user = root
@@ -184,28 +145,10 @@ echo -e "${GREEN}[✓]${NC} Structure créée dans ~/ansible-siem/"
 #---------------------------------------
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║                                                                  ║${NC}"
 echo -e "${GREEN}║     ✓ ANSIBLE INSTALLÉ AVEC SUCCÈS !                            ║${NC}"
-echo -e "${GREEN}║                                                                  ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
-echo -e "${CYAN}                      PROCHAINES ÉTAPES                             ${NC}"
-echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+echo -e "  ${YELLOW}1.${NC} cd ~/ansible-siem"
+echo -e "  ${YELLOW}2.${NC} nano inventory.ini  (ajoute tes serveurs)"
+echo -e "  ${YELLOW}3.${NC} ansible-playbook playbooks/install_siem.yml"
 echo ""
-echo -e "  ${YELLOW}1.${NC} Va dans le dossier Ansible :"
-echo -e "     ${GREEN}cd ~/ansible-siem${NC}"
-echo ""
-echo -e "  ${YELLOW}2.${NC} Édite le fichier inventory.ini :"
-echo -e "     ${GREEN}nano inventory.ini${NC}"
-echo -e "     → Ajoute les IP de tes serveurs"
-echo ""
-echo -e "  ${YELLOW}3.${NC} Télécharge les playbooks :"
-echo -e "     ${GREEN}wget https://raw.githubusercontent.com/.../install_siem.yml -P playbooks/${NC}"
-echo ""
-echo -e "  ${YELLOW}4.${NC} Lance l'installation :"
-echo -e "     ${GREEN}ansible-playbook playbooks/install_siem.yml${NC}"
-echo ""
-echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
-echo ""
-
