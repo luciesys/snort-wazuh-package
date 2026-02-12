@@ -90,14 +90,14 @@ check_os() {
     . /etc/os-release
     case $ID in
         ubuntu)
-            [[ "$VERSION_ID" != "20.04" && "$VERSION_ID" != "22.04" && "$VERSION_ID" != "24.04" ]] && abort "Ubuntu $VERSION_ID non supporté"
+            [[ "$VERSION_ID" != "20.04" && "$VERSION_ID" != "22.04" && "$VERSION_ID" != "24.04" ]] && abort "Ubuntu $VERSION_ID non supporté. Versions acceptées: 20.04, 22.04, 24.04"
             log_success "OS compatible: Ubuntu $VERSION_ID"
             ;;
         debian)
-            [[ "$VERSION_ID" != "11" && "$VERSION_ID" != "12" ]] && abort "Debian $VERSION_ID non supporté"
+            [[ "$VERSION_ID" != "11" && "$VERSION_ID" != "12" ]] && abort "Debian $VERSION_ID non supporté. Versions acceptées: 11, 12"
             log_success "OS compatible: Debian $VERSION_ID"
             ;;
-        *) abort "OS non supporté: $ID" ;;
+        *) abort "OS non supporté: $ID. Seuls Ubuntu et Debian sont acceptés." ;;
     esac
 }
 
@@ -341,34 +341,24 @@ show_summary() {
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${YELLOW}Vérifier les services :${NC}"
-    echo -e "  ───────────────────────"
     echo -e "  systemctl status snort"
     echo -e "  systemctl status wazuh-manager"
     echo -e "  systemctl status wazuh-indexer"
     echo -e "  systemctl status wazuh-dashboard"
     echo ""
-    echo -e "  ${YELLOW}Vérifier les ports ouverts :${NC}"
-    echo -e "  ────────────────────────────"
+    echo -e "  ${YELLOW}Vérifier les ports :${NC}"
     echo -e "  ss -tlnp | grep -E '443|1514|1515|9200|55000'"
     echo ""
     echo -e "  ${YELLOW}Vérifier les logs :${NC}"
-    echo -e "  ───────────────────"
     echo -e "  tail -f /var/log/snort/alert"
     echo -e "  tail -f /var/ossec/logs/ossec.log"
-    echo -e "  tail -f /var/ossec/logs/alerts/alerts.log"
     echo ""
     echo -e "  ${YELLOW}Vérifier les utilisateurs :${NC}"
-    echo -e "  ───────────────────────────"
     echo -e "  id snort"
     echo -e "  id wazuh"
     echo ""
-    echo -e "  ${YELLOW}Tester l'accès dashboard :${NC}"
-    echo -e "  ──────────────────────────"
+    echo -e "  ${YELLOW}Tester le dashboard :${NC}"
     echo -e "  curl -k -s -o /dev/null -w '%{http_code}' https://localhost"
-    echo ""
-    echo -e "  ${YELLOW}Vérifier Wazuh API :${NC}"
-    echo -e "  ─────────────────────"
-    echo -e "  curl -k -s https://localhost:55000/security/user/authenticate -u wazuh-wui:wazuh-wui"
     echo ""
     
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
@@ -387,16 +377,15 @@ show_summary() {
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  /root/siem_credentials.txt       - Mots de passe"
-    echo -e "  /root/wazuh-install-files.tar    - Fichiers installation Wazuh"
-    echo -e "  /var/ossec/etc/ossec.conf        - Configuration Wazuh"
-    echo -e "  /etc/snort/snort.conf            - Configuration Snort"
-    echo -e "  /var/log/siem-install.log        - Log d'installation"
+    echo -e "  /root/wazuh-install-files.tar    - Fichiers Wazuh"
+    echo -e "  /var/ossec/etc/ossec.conf        - Config Wazuh"
+    echo -e "  /etc/snort/snort.conf            - Config Snort"
+    echo -e "  /var/log/siem-install.log        - Log installation"
     echo ""
     
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${YELLOW}Note: Le certificat SSL est auto-signé.${NC}"
-    echo -e "  ${YELLOW}Votre navigateur affichera un avertissement de sécurité.${NC}"
     echo ""
 }
 
