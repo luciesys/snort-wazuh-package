@@ -7,16 +7,11 @@
 #         USAGE: curl -sL https://raw.githubusercontent.com/luciesys/snort-wazuh-package/main/install_siem_v3.sh | sudo bash
 #
 #   DESCRIPTION: Installation automatique de Snort IDS + Wazuh SIEM
-#                Avec création des utilisateurs et fichier credentials
 #
-#   OBJECTIFS COUVERTS :
-#   1. Créer utilisateur Snort (sudo)
-#   2. Créer utilisateur Wazuh (sudo)
-#   3. Installer les dépendances
-#   4. Installer Snort
-#   5. Installer Wazuh (Manager, Indexer, Dashboard)
-#   6. Lier Snort à Wazuh
-#   7. Centraliser les credentials dans un fichier
+#   COMPORTEMENT :
+#   - Si prérequis non rempli → ARRÊT IMMÉDIAT
+#   - Si pas d'Internet → ARRÊT IMMÉDIAT
+#   - Si Snort/Wazuh déjà installé → SUPPRIME TOUT ET RÉINSTALLE
 #
 #        AUTHOR: SIEM Africa Team
 #       VERSION: 3.0
@@ -45,7 +40,6 @@ MIN_RAM=4
 MIN_DISK=30
 RETRY_COUNT=3
 
-# CREDENTIALS PAR DÉFAUT
 SNORT_USER="snort"
 SNORT_PASSWORD="snort123"
 WAZUH_USER="wazuh"
@@ -53,611 +47,388 @@ WAZUH_PASSWORD="wazuh123"
 CREDENTIALS_FILE="/root/siem_credentials.txt"
 
 #---------------------------------------
-# FONCTIONS UTILITAIRES
+# FONCTIONS
 #---------------------------------------
-log() {
-    echo -e "$1" | tee -a $LOG_FILE
+log() { echo -e "$1" | tee -a $LOG_FILE; }
+log_success() { log "${GREEN}[✓]${NC} $1"; }
+log_error() { log "${RED}[✗]${NC} $1"; }
+log_info() { log "${CYAN}[i]${NC} $1"; }
+log_warning() { log "${YELLOW}[!]${NC} $1"; }
+log_step() { log "${BLUE}[ÉTAPE $1]${NC} $2"; }
+
+abort() {
+    echo ""
+    echo -e "${RED}╔══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║     ✗ INSTALLATION ARRÊTÉE                                      ║${NC}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  ${YELLOW}Raison: $1${NC}"
+    echo -e "  Log: $LOG_FILE"
+    echo ""
+    exit 1
 }
 
-log_success() {
-    log "${GREEN}[✓]${NC} $1"
-}
-
-log_error() {
-    log "${RED}[✗]${NC} $1"
-}
-
-log_info() {
-    log "${CYAN}[i]${NC} $1"
-}
-
-log_warning() {
-    log "${YELLOW}[!]${NC} $1"
-}
-
-log_step() {
-    log "${BLUE}[ÉTAPE $1]${NC} $2"
-}
-
-#---------------------------------------
-# BANNIÈRE
-#---------------------------------------
 show_banner() {
     clear
     echo -e "${CYAN}"
     echo "╔══════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                  ║"
     echo "║     🛡️  SNORT + WAZUH - Installation Automatique v3.0           ║"
-    echo "║                                                                  ║"
-    echo "║     Package de sécurité pour entreprises                        ║"
-    echo "║                                                                  ║"
     echo "╚══════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     echo ""
 }
 
-#---------------------------------------
-# VÉRIFICATION ROOT
-#---------------------------------------
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        log_error "Ce script doit être exécuté en tant que root (sudo)"
-        exit 1
+        abort "Ce script doit être exécuté en tant que root (sudo)"
     fi
     log_success "Exécution en tant que root"
 }
 
-#---------------------------------------
-# VÉRIFICATION OS
-#---------------------------------------
 check_os() {
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS=$ID
-        VERSION=$VERSION_ID
-    else
-        log_error "Impossible de détecter l'OS"
-        exit 1
-    fi
-
-    case $OS in
+    [ ! -f /etc/os-release ] && abort "Impossible de détecter l'OS"
+    . /etc/os-release
+    case $ID in
         ubuntu)
-            if [[ "$VERSION" != "20.04" && "$VERSION" != "22.04" && "$VERSION" != "24.04" ]]; then
-                log_warning "Ubuntu $VERSION détecté. Versions recommandées: 20.04, 22.04, 24.04"
-            else
-                log_success "OS compatible: Ubuntu $VERSION"
-            fi
+            [[ "$VERSION_ID" != "20.04" && "$VERSION_ID" != "22.04" && "$VERSION_ID" != "24.04" ]] && abort "Ubuntu $VERSION_ID non supporté"
+            log_success "OS compatible: Ubuntu $VERSION_ID"
             ;;
         debian)
-            if [[ "$VERSION" != "11" && "$VERSION" != "12" ]]; then
-                log_warning "Debian $VERSION détecté. Versions recommandées: 11, 12"
-            else
-                log_success "OS compatible: Debian $VERSION"
-            fi
+            [[ "$VERSION_ID" != "11" && "$VERSION_ID" != "12" ]] && abort "Debian $VERSION_ID non supporté"
+            log_success "OS compatible: Debian $VERSION_ID"
             ;;
-        *)
-            log_error "OS non supporté: $OS. Utilisez Ubuntu ou Debian."
-            exit 1
-            ;;
+        *) abort "OS non supporté: $ID" ;;
     esac
 }
 
-#---------------------------------------
-# VÉRIFICATION RESSOURCES
-#---------------------------------------
-check_resources() {
-    log_info "Vérification des ressources système..."
-    
-    # RAM
+check_ram() {
     TOTAL_RAM=$(free -g | awk '/^Mem:/{print $2}')
-    if [ "$TOTAL_RAM" -lt "$MIN_RAM" ]; then
-        log_error "RAM insuffisante: ${TOTAL_RAM}Go (minimum: ${MIN_RAM}Go)"
-        exit 1
-    fi
-    log_success "RAM: ${TOTAL_RAM}Go (minimum: ${MIN_RAM}Go)"
-    
-    # Disque
+    [ "$TOTAL_RAM" -lt "$MIN_RAM" ] && abort "RAM insuffisante: ${TOTAL_RAM}Go (minimum: ${MIN_RAM}Go)"
+    log_success "RAM: ${TOTAL_RAM}Go"
+}
+
+check_disk() {
     AVAILABLE_DISK=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
-    if [ "$AVAILABLE_DISK" -lt "$MIN_DISK" ]; then
-        log_error "Espace disque insuffisant: ${AVAILABLE_DISK}Go (minimum: ${MIN_DISK}Go)"
-        exit 1
-    fi
-    log_success "Disque disponible: ${AVAILABLE_DISK}Go (minimum: ${MIN_DISK}Go)"
-    
-    # CPU
+    [ "$AVAILABLE_DISK" -lt "$MIN_DISK" ] && abort "Disque insuffisant: ${AVAILABLE_DISK}Go (minimum: ${MIN_DISK}Go)"
+    log_success "Disque: ${AVAILABLE_DISK}Go"
+}
+
+check_cpu() {
     CPU_CORES=$(nproc)
+    [ "$CPU_CORES" -lt 2 ] && abort "CPU insuffisant: ${CPU_CORES} cœur(s) (minimum: 2)"
     log_success "CPU: ${CPU_CORES} cœurs"
 }
 
-#---------------------------------------
-# VÉRIFICATION RÉSEAU
-#---------------------------------------
-check_network() {
-    log_info "Vérification de la connexion Internet..."
-    
-    if ! ping -c 1 8.8.8.8 &> /dev/null; then
-        log_error "Pas de connexion Internet (ping 8.8.8.8 échoué)"
-        exit 1
+check_internet() {
+    log_info "Vérification connexion Internet..."
+    ping -c 3 8.8.8.8 &>/dev/null || abort "Pas de connexion Internet"
+    if ! ping -c 3 google.com &>/dev/null; then
+        log_warning "Problème DNS - Correction..."
+        echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" > /etc/resolv.conf
+        ping -c 3 google.com &>/dev/null || abort "DNS non fonctionnel"
     fi
-    
-    if ! ping -c 1 google.com &> /dev/null; then
-        log_warning "Problème DNS détecté. Correction automatique..."
-        echo "nameserver 8.8.8.8" | tee /etc/resolv.conf > /dev/null
-        echo "nameserver 8.8.4.4" | tee -a /etc/resolv.conf > /dev/null
-        
-        if ! ping -c 1 google.com &> /dev/null; then
-            log_error "Impossible de résoudre les noms de domaine"
-            exit 1
-        fi
-    fi
-    
+    curl -s --head --connect-timeout 10 https://packages.wazuh.com &>/dev/null || abort "Impossible d'accéder aux dépôts Wazuh"
     log_success "Connexion Internet OK"
 }
 
-#---------------------------------------
-# NETTOYAGE INSTALLATIONS PRÉCÉDENTES
-#---------------------------------------
-cleanup_previous() {
-    log_info "Nettoyage des installations précédentes..."
-    
-    systemctl stop wazuh-manager 2>/dev/null || true
-    systemctl stop wazuh-indexer 2>/dev/null || true
-    systemctl stop wazuh-dashboard 2>/dev/null || true
-    systemctl stop filebeat 2>/dev/null || true
-    systemctl stop snort 2>/dev/null || true
-    
-    apt remove --purge wazuh-manager wazuh-indexer wazuh-dashboard filebeat snort -y 2>/dev/null || true
-    
-    rm -rf /var/ossec 2>/dev/null || true
-    rm -rf /etc/wazuh-indexer 2>/dev/null || true
-    rm -rf /var/lib/wazuh-indexer 2>/dev/null || true
-    rm -rf /usr/share/wazuh-indexer 2>/dev/null || true
-    rm -rf /etc/filebeat 2>/dev/null || true
-    rm -rf /var/lib/filebeat 2>/dev/null || true
-    rm -rf /etc/snort 2>/dev/null || true
-    rm -rf /var/log/snort 2>/dev/null || true
-    
-    rm -f wazuh-install.sh 2>/dev/null || true
-    rm -f wazuh-install-files.tar 2>/dev/null || true
-    rm -f /var/log/wazuh-install.log 2>/dev/null || true
-    
+cleanup_all() {
+    log_info "Nettoyage complet..."
+    systemctl stop snort wazuh-manager wazuh-indexer wazuh-dashboard filebeat 2>/dev/null || true
+    systemctl disable snort wazuh-manager wazuh-indexer wazuh-dashboard filebeat 2>/dev/null || true
+    apt remove --purge -y snort wazuh-manager wazuh-indexer wazuh-dashboard wazuh-agent filebeat 2>/dev/null || true
+    rm -rf /var/ossec /etc/wazuh-indexer /var/lib/wazuh-indexer /usr/share/wazuh-indexer
+    rm -rf /etc/filebeat /var/lib/filebeat /etc/snort /var/log/snort
+    rm -rf /usr/share/wazuh-dashboard /etc/wazuh-dashboard
+    rm -f /root/wazuh-install.sh /root/wazuh-install-files.tar wazuh-install.sh wazuh-install-files.tar
+    rm -f /var/log/wazuh-install.log /etc/systemd/system/snort.service
+    systemctl daemon-reload
     apt autoremove -y 2>/dev/null || true
     apt clean 2>/dev/null || true
-    
     log_success "Nettoyage terminé"
 }
 
-#---------------------------------------
-# MISE À JOUR SYSTÈME
-#---------------------------------------
+check_existing() {
+    log_info "Vérification installations existantes..."
+    if dpkg -l | grep -qE "snort|wazuh" 2>/dev/null || [ -d "/etc/snort" ] || [ -d "/var/ossec" ]; then
+        log_warning "Installation existante détectée → Suppression et réinstallation"
+        cleanup_all
+    else
+        log_success "Aucune installation existante"
+    fi
+}
+
 update_system() {
-    log_info "Mise à jour du système..."
-    
-    apt update -qq
-    DEBIAN_FRONTEND=noninteractive apt upgrade -y -qq
-    
+    log_info "Mise à jour système..."
+    apt update -qq || abort "Échec mise à jour APT"
+    DEBIAN_FRONTEND=noninteractive apt upgrade -y -qq || abort "Échec mise à jour système"
     log_success "Système mis à jour"
 }
 
-#---------------------------------------
-# INSTALLATION DÉPENDANCES
-#---------------------------------------
 install_dependencies() {
-    log_info "Installation des dépendances..."
-    
-    DEBIAN_FRONTEND=noninteractive apt install -y -qq \
-        curl \
-        wget \
-        gnupg \
-        apt-transport-https \
-        lsb-release \
-        ca-certificates \
-        software-properties-common \
-        net-tools \
-        jq
-    
+    log_info "Installation dépendances..."
+    DEBIAN_FRONTEND=noninteractive apt install -y -qq curl wget gnupg apt-transport-https lsb-release ca-certificates software-properties-common net-tools jq || abort "Échec installation dépendances"
     log_success "Dépendances installées"
 }
 
-#---------------------------------------
-# OBJECTIF 1 : CRÉER UTILISATEUR SNORT
-#---------------------------------------
-create_snort_user() {
-    log_step "1/7" "CRÉATION UTILISATEUR SNORT"
-    
-    if id "$SNORT_USER" &>/dev/null; then
-        log_info "Utilisateur $SNORT_USER existe déjà"
-    else
-        useradd -m -s /bin/bash -c "Utilisateur Snort IDS" $SNORT_USER
-        echo "$SNORT_USER:$SNORT_PASSWORD" | chpasswd
-        log_success "Utilisateur $SNORT_USER créé"
-    fi
-    
-    # Ajouter au groupe sudo
-    usermod -aG sudo $SNORT_USER 2>/dev/null || true
-    log_success "Utilisateur $SNORT_USER ajouté au groupe sudo"
+create_users() {
+    log_step "1/4" "CRÉATION UTILISATEURS"
+    for user in $SNORT_USER $WAZUH_USER; do
+        pass=$([ "$user" = "$SNORT_USER" ] && echo "$SNORT_PASSWORD" || echo "$WAZUH_PASSWORD")
+        if id "$user" &>/dev/null; then
+            echo "$user:$pass" | chpasswd
+        else
+            useradd -m -s /bin/bash "$user" || abort "Impossible de créer $user"
+            echo "$user:$pass" | chpasswd
+        fi
+        usermod -aG sudo "$user" 2>/dev/null || true
+    done
+    log_success "Utilisateurs snort et wazuh créés"
 }
 
-#---------------------------------------
-# OBJECTIF 2 : CRÉER UTILISATEUR WAZUH
-#---------------------------------------
-create_wazuh_user() {
-    log_step "2/7" "CRÉATION UTILISATEUR WAZUH"
-    
-    if id "$WAZUH_USER" &>/dev/null; then
-        log_info "Utilisateur $WAZUH_USER existe déjà"
-    else
-        useradd -m -s /bin/bash -c "Utilisateur Wazuh SIEM" $WAZUH_USER
-        echo "$WAZUH_USER:$WAZUH_PASSWORD" | chpasswd
-        log_success "Utilisateur $WAZUH_USER créé"
-    fi
-    
-    # Ajouter au groupe sudo
-    usermod -aG sudo $WAZUH_USER 2>/dev/null || true
-    log_success "Utilisateur $WAZUH_USER ajouté au groupe sudo"
-}
-
-#---------------------------------------
-# OBJECTIF 4 : INSTALLATION SNORT
-#---------------------------------------
 install_snort() {
-    log_step "3/7" "INSTALLATION DE SNORT"
-    
+    log_step "2/4" "INSTALLATION SNORT"
     DEBIAN_FRONTEND=noninteractive apt install -y snort 2>/dev/null || {
-        log_warning "Snort non disponible, tentative alternative..."
         add-apt-repository ppa:oisf/suricata-stable -y 2>/dev/null || true
         apt update -qq
-        DEBIAN_FRONTEND=noninteractive apt install -y snort 2>/dev/null || {
-            log_error "Impossible d'installer Snort"
-            return 1
-        }
+        DEBIAN_FRONTEND=noninteractive apt install -y snort || abort "Impossible d'installer Snort"
     }
-    
     log_success "Snort installé"
-    return 0
 }
 
-#---------------------------------------
-# CONFIGURATION SNORT
-#---------------------------------------
 configure_snort() {
-    log_step "4/7" "CONFIGURATION DE SNORT"
-    
     LOCAL_NET=$(ip route | grep -oP 'src \K[\d.]+' | head -1 | sed 's/\.[0-9]*$/.0\/24/')
-    
-    if [ -z "$LOCAL_NET" ]; then
-        LOCAL_NET="192.168.1.0/24"
-    fi
-    
-    log_info "Réseau détecté: $LOCAL_NET"
-    
-    if [ -f "$SNORT_CONF" ]; then
-        cp $SNORT_CONF ${SNORT_CONF}.backup
-        sed -i "s|ipvar HOME_NET any|ipvar HOME_NET $LOCAL_NET|g" $SNORT_CONF
-        sed -i "s|var HOME_NET any|var HOME_NET $LOCAL_NET|g" $SNORT_CONF
-    fi
-    
-    mkdir -p /var/log/snort
-    mkdir -p /etc/snort/rules
-    
-    # Donner les permissions à l'utilisateur snort
-    chown -R $SNORT_USER:$SNORT_USER /var/log/snort
-    chown -R $SNORT_USER:$SNORT_USER /etc/snort 2>/dev/null || true
-    chmod -R 755 /var/log/snort
-    
-    # Créer service systemd
-    if [ ! -f /etc/systemd/system/snort.service ]; then
-        INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
-        
-        cat > /etc/systemd/system/snort.service << EOF
+    [ -z "$LOCAL_NET" ] && LOCAL_NET="192.168.1.0/24"
+    [ -f "$SNORT_CONF" ] && sed -i "s|ipvar HOME_NET any|ipvar HOME_NET $LOCAL_NET|g; s|var HOME_NET any|var HOME_NET $LOCAL_NET|g" $SNORT_CONF
+    mkdir -p /var/log/snort /etc/snort/rules
+    chown -R $SNORT_USER:$SNORT_USER /var/log/snort /etc/snort 2>/dev/null || true
+    INTERFACE=$(ip route | grep default | awk '{print $5}' | head -1)
+    cat > /etc/systemd/system/snort.service << EOF
 [Unit]
 Description=Snort IDS
 After=network.target
-
 [Service]
 Type=simple
 User=$SNORT_USER
 ExecStart=/usr/sbin/snort -q -c /etc/snort/snort.conf -i $INTERFACE -A fast
 Restart=on-failure
-RestartSec=10
-
 [Install]
 WantedBy=multi-user.target
 EOF
-    fi
-    
-    systemctl daemon-reload
-    systemctl enable snort 2>/dev/null || true
-    systemctl start snort 2>/dev/null || log_warning "Snort n'a pas pu démarrer"
-    
+    systemctl daemon-reload && systemctl enable snort && systemctl start snort 2>/dev/null || true
     log_success "Snort configuré (HOME_NET: $LOCAL_NET)"
-    return 0
 }
 
-#---------------------------------------
-# OBJECTIF 5 : INSTALLATION WAZUH
-#---------------------------------------
 install_wazuh() {
-    log_step "5/7" "INSTALLATION DE WAZUH $WAZUH_VERSION"
-    
-    log_info "Cette étape peut prendre 10-20 minutes..."
-    
-    curl -sO https://packages.wazuh.com/${WAZUH_VERSION}/wazuh-install.sh
-    
-    if [ ! -f "wazuh-install.sh" ]; then
-        log_error "Impossible de télécharger le script Wazuh"
-        return 1
-    fi
-    
+    log_step "3/4" "INSTALLATION WAZUH $WAZUH_VERSION"
+    log_info "Cette étape prend 10-20 minutes..."
+    curl -sO https://packages.wazuh.com/${WAZUH_VERSION}/wazuh-install.sh || abort "Impossible de télécharger Wazuh"
     chmod +x wazuh-install.sh
-    
-    local attempt=1
+    local attempt=1 success=false
     while [ $attempt -le $RETRY_COUNT ]; do
-        log_info "Tentative d'installation $attempt/$RETRY_COUNT..."
-        
+        log_info "Tentative $attempt/$RETRY_COUNT..."
         if bash wazuh-install.sh -a -i >> $LOG_FILE 2>&1; then
-            log_success "Wazuh installé avec succès!"
-            
-            # Donner les permissions à l'utilisateur wazuh
-            chown -R $WAZUH_USER:$WAZUH_USER /var/ossec 2>/dev/null || true
-            
-            return 0
+            success=true; break
         fi
-        
         log_warning "Tentative $attempt échouée"
-        
-        if [ $attempt -lt $RETRY_COUNT ]; then
-            log_info "Nettoyage avant nouvelle tentative..."
+        [ $attempt -lt $RETRY_COUNT ] && {
             systemctl stop wazuh-manager wazuh-indexer wazuh-dashboard 2>/dev/null || true
             apt remove --purge wazuh-manager wazuh-indexer wazuh-dashboard -y 2>/dev/null || true
-            rm -rf /var/ossec /etc/wazuh-indexer /var/lib/wazuh-indexer 2>/dev/null || true
-            rm -f wazuh-install-files.tar 2>/dev/null || true
+            rm -rf /var/ossec /etc/wazuh-indexer /var/lib/wazuh-indexer wazuh-install-files.tar 2>/dev/null || true
             sleep 5
-        fi
-        
+        }
         attempt=$((attempt + 1))
     done
-    
-    log_error "Installation de Wazuh échouée après $RETRY_COUNT tentatives"
-    return 1
+    [ "$success" = false ] && abort "Installation Wazuh échouée après $RETRY_COUNT tentatives"
+    log_success "Wazuh installé"
+    chown -R $WAZUH_USER:$WAZUH_USER /var/ossec 2>/dev/null || true
+    [ -f "wazuh-install-files.tar" ] && cp wazuh-install-files.tar /root/
 }
 
-#---------------------------------------
-# OBJECTIF 6 : INTÉGRATION SNORT-WAZUH
-#---------------------------------------
 configure_integration() {
-    log_step "6/7" "INTÉGRATION SNORT-WAZUH"
-    
+    log_step "4/4" "INTÉGRATION SNORT-WAZUH"
     OSSEC_CONF="/var/ossec/etc/ossec.conf"
-    
-    if [ -f "$OSSEC_CONF" ]; then
-        if ! grep -q "/var/log/snort/alert" $OSSEC_CONF; then
-            sed -i '/<\/ossec_config>/i \
-  <localfile>\
-    <log_format>snort-full</log_format>\
-    <location>/var/log/snort/alert</location>\
-  </localfile>' $OSSEC_CONF
-            
-            log_success "Intégration Snort-Wazuh configurée"
-        else
-            log_info "Intégration déjà configurée"
-        fi
-        
-        systemctl restart wazuh-manager 2>/dev/null || true
-    else
-        log_warning "Fichier ossec.conf non trouvé"
-    fi
-    
-    return 0
+    [ ! -f "$OSSEC_CONF" ] && abort "ossec.conf non trouvé"
+    grep -q "/var/log/snort/alert" $OSSEC_CONF || sed -i '/<\/ossec_config>/i \  <localfile>\n    <log_format>snort-full</log_format>\n    <location>/var/log/snort/alert</location>\n  </localfile>' $OSSEC_CONF
+    systemctl restart wazuh-manager || abort "Impossible de redémarrer Wazuh"
+    log_success "Intégration configurée"
 }
 
-#---------------------------------------
-# OBJECTIF 7 : CRÉER FICHIER CREDENTIALS
-#---------------------------------------
 create_credentials_file() {
-    log_step "7/7" "CRÉATION FICHIER CREDENTIALS"
-    
-    IP_ADDRESS=$(hostname -I | awk '{print $1}')
-    HOSTNAME=$(hostname)
+    log_info "Création fichier credentials..."
+    IP=$(hostname -I | awk '{print $1}')
     DATE=$(date '+%Y-%m-%d %H:%M:%S')
-    
-    # Récupérer le password Wazuh Dashboard
-    WAZUH_DASHBOARD_PASS="Voir /root/wazuh-install-files.tar"
-    if [ -f "wazuh-install-files.tar" ]; then
-        tar -xf wazuh-install-files.tar -C /tmp 2>/dev/null || true
-        WAZUH_DASHBOARD_PASS=$(grep -A1 "admin" /tmp/wazuh-install-files/wazuh-passwords.txt 2>/dev/null | tail -1 | tr -d ' ' || echo "Voir /root/wazuh-install-files.tar")
-        
-        # Copier le fichier tar dans /root
-        cp wazuh-install-files.tar /root/ 2>/dev/null || true
-    fi
-    
+    WAZUH_PASS="Voir /root/wazuh-install-files.tar"
+    [ -f "/root/wazuh-install-files.tar" ] && {
+        tar -xf /root/wazuh-install-files.tar -C /tmp 2>/dev/null
+        WAZUH_PASS=$(grep -A1 "admin" /tmp/wazuh-install-files/wazuh-passwords.txt 2>/dev/null | tail -1 | tr -d ' ')
+        rm -rf /tmp/wazuh-install-files
+    }
     cat > $CREDENTIALS_FILE << EOF
 ╔══════════════════════════════════════════════════════════════════╗
 ║                    SIEM CREDENTIALS                              ║
 ╚══════════════════════════════════════════════════════════════════╝
 
-Date de création : $DATE
-Serveur          : $IP_ADDRESS
-Hostname         : $HOSTNAME
+Date: $DATE | Serveur: $IP
 
 ══════════════════════════════════════════════════════════════════
-                    UTILISATEURS SYSTÈME
+UTILISATEURS SYSTÈME
 ══════════════════════════════════════════════════════════════════
-
-UTILISATEUR SNORT
------------------
-Username : $SNORT_USER
-Password : $SNORT_PASSWORD
-Accès    : sudo
-Rôle     : Gestion Snort IDS (/etc/snort, /var/log/snort)
-
-UTILISATEUR WAZUH
------------------
-Username : $WAZUH_USER
-Password : $WAZUH_PASSWORD
-Accès    : sudo
-Rôle     : Gestion Wazuh SIEM (/var/ossec)
+SNORT  : $SNORT_USER / $SNORT_PASSWORD (sudo)
+WAZUH  : $WAZUH_USER / $WAZUH_PASSWORD (sudo)
 
 ══════════════════════════════════════════════════════════════════
-                    WAZUH DASHBOARD
+WAZUH DASHBOARD
 ══════════════════════════════════════════════════════════════════
-
-URL      : https://$IP_ADDRESS
+URL      : https://$IP
 Username : admin
-Password : $WAZUH_DASHBOARD_PASS
+Password : $WAZUH_PASS
 
 ══════════════════════════════════════════════════════════════════
-                    COMMANDES UTILES
-══════════════════════════════════════════════════════════════════
-
-Vérifier Snort        : systemctl status snort
-Vérifier Wazuh Manager: systemctl status wazuh-manager
-Vérifier Wazuh Indexer: systemctl status wazuh-indexer
-Vérifier Dashboard    : systemctl status wazuh-dashboard
-
-Logs Snort            : tail -f /var/log/snort/alert
-Logs Wazuh            : tail -f /var/ossec/logs/ossec.log
-
-══════════════════════════════════════════════════════════════════
-⚠️  IMPORTANT : Changez ces mots de passe en production !
+⚠️  Changez ces mots de passe en production !
 ══════════════════════════════════════════════════════════════════
 EOF
-    
     chmod 600 $CREDENTIALS_FILE
-    log_success "Fichier credentials créé: $CREDENTIALS_FILE"
+    log_success "Credentials: $CREDENTIALS_FILE"
 }
 
-#---------------------------------------
-# AFFICHER RÉSUMÉ
-#---------------------------------------
 show_summary() {
-    IP_ADDRESS=$(hostname -I | awk '{print $1}')
-    
+    IP=$(hostname -I | awk '{print $1}')
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║                                                                  ║${NC}"
     echo -e "${GREEN}║     ✓ INSTALLATION TERMINÉE AVEC SUCCÈS !                       ║${NC}"
-    echo -e "${GREEN}║                                                                  ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
+    
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}                    UTILISATEURS CRÉÉS                              ${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
-    echo ""
-    echo -e "  ${YELLOW}Utilisateur Snort${NC}"
-    echo -e "  Username : ${GREEN}$SNORT_USER${NC}"
-    echo -e "  Password : ${GREEN}$SNORT_PASSWORD${NC}"
-    echo ""
-    echo -e "  ${YELLOW}Utilisateur Wazuh${NC}"
-    echo -e "  Username : ${GREEN}$WAZUH_USER${NC}"
-    echo -e "  Password : ${GREEN}$WAZUH_PASSWORD${NC}"
-    echo ""
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}                    WAZUH DASHBOARD                                 ${NC}"
+    echo -e "${CYAN}                        ACCÈS WAZUH DASHBOARD                       ${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
     echo ""
-    echo -e "  URL         : ${GREEN}https://${IP_ADDRESS}${NC}"
+    echo -e "  URL         : ${GREEN}https://${IP}${NC}"
     echo -e "  Utilisateur : ${YELLOW}admin${NC}"
     echo ""
+    
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}                    FICHIER CREDENTIALS                             ${NC}"
+    echo -e "${CYAN}                        UTILISATEURS CRÉÉS                          ${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
     echo ""
-    echo -e "  ${GREEN}$CREDENTIALS_FILE${NC}"
+    echo -e "  • snort (accès sudo)"
+    echo -e "  • wazuh (accès sudo)"
     echo ""
-    echo -e "  Pour voir les credentials : ${YELLOW}cat $CREDENTIALS_FILE${NC}"
+    
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                        ÉTAT DES SERVICES                           ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
     echo ""
+    for s in snort wazuh-manager wazuh-indexer wazuh-dashboard; do
+        if systemctl is-active --quiet $s 2>/dev/null; then
+            echo -e "  $s: ${GREEN}● Actif${NC}"
+        else
+            echo -e "  $s: ${RED}○ Inactif${NC}"
+        fi
+    done
+    echo ""
+    
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                        FICHIER CREDENTIALS                         ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  Tous les mots de passe : ${YELLOW}$CREDENTIALS_FILE${NC}"
+    echo -e "  Pour afficher          : ${GREEN}cat $CREDENTIALS_FILE${NC}"
+    echo ""
+    
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                   COMMANDES DE VÉRIFICATION                        ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  ${YELLOW}Vérifier les services :${NC}"
+    echo -e "  ───────────────────────"
+    echo -e "  systemctl status snort"
+    echo -e "  systemctl status wazuh-manager"
+    echo -e "  systemctl status wazuh-indexer"
+    echo -e "  systemctl status wazuh-dashboard"
+    echo ""
+    echo -e "  ${YELLOW}Vérifier les ports ouverts :${NC}"
+    echo -e "  ────────────────────────────"
+    echo -e "  ss -tlnp | grep -E '443|1514|1515|9200|55000'"
+    echo ""
+    echo -e "  ${YELLOW}Vérifier les logs :${NC}"
+    echo -e "  ───────────────────"
+    echo -e "  tail -f /var/log/snort/alert"
+    echo -e "  tail -f /var/ossec/logs/ossec.log"
+    echo -e "  tail -f /var/ossec/logs/alerts/alerts.log"
+    echo ""
+    echo -e "  ${YELLOW}Vérifier les utilisateurs :${NC}"
+    echo -e "  ───────────────────────────"
+    echo -e "  id snort"
+    echo -e "  id wazuh"
+    echo ""
+    echo -e "  ${YELLOW}Tester l'accès dashboard :${NC}"
+    echo -e "  ──────────────────────────"
+    echo -e "  curl -k -s -o /dev/null -w '%{http_code}' https://localhost"
+    echo ""
+    echo -e "  ${YELLOW}Vérifier Wazuh API :${NC}"
+    echo -e "  ─────────────────────"
+    echo -e "  curl -k -s https://localhost:55000/security/user/authenticate -u wazuh-wui:wazuh-wui"
+    echo ""
+    
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                        PORTS UTILISÉS                              ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  443   - Wazuh Dashboard (HTTPS)"
+    echo -e "  1514  - Wazuh Agent communication"
+    echo -e "  1515  - Wazuh Agent enrollment"
+    echo -e "  9200  - Wazuh Indexer"
+    echo -e "  55000 - Wazuh API"
+    echo ""
+    
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                        FICHIERS IMPORTANTS                         ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  /root/siem_credentials.txt       - Mots de passe"
+    echo -e "  /root/wazuh-install-files.tar    - Fichiers installation Wazuh"
+    echo -e "  /var/ossec/etc/ossec.conf        - Configuration Wazuh"
+    echo -e "  /etc/snort/snort.conf            - Configuration Snort"
+    echo -e "  /var/log/siem-install.log        - Log d'installation"
+    echo ""
+    
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${YELLOW}Note: Le certificat SSL est auto-signé.${NC}"
+    echo -e "  ${YELLOW}Votre navigateur affichera un avertissement de sécurité.${NC}"
     echo ""
 }
 
-#---------------------------------------
-# AFFICHER ERREUR
-#---------------------------------------
-show_error() {
-    echo ""
-    echo -e "${RED}╔══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║     ✗ INSTALLATION ÉCHOUÉE                                      ║${NC}"
-    echo -e "${RED}╚══════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "  Consultez: $LOG_FILE"
-    echo ""
-}
-
-#---------------------------------------
-# MAIN
-#---------------------------------------
 main() {
-    touch $LOG_FILE
-    
+    echo "=== Installation SIEM - $(date) ===" > $LOG_FILE
     show_banner
     
-    log_info "Début de l'installation - $(date)"
-    echo ""
-    
-    # Vérifications
-    echo -e "${CYAN}[VÉRIFICATIONS]${NC}"
+    echo -e "${CYAN}[VÉRIFICATIONS OBLIGATOIRES]${NC}"
     echo "─────────────────────────────────────────────────────────────────"
-    check_root
-    check_os
-    check_resources
-    check_network
+    check_root; check_os; check_ram; check_disk; check_cpu; check_internet
     echo ""
     
-    # Préparation
+    echo -e "${CYAN}[VÉRIFICATION INSTALLATION EXISTANTE]${NC}"
+    echo "─────────────────────────────────────────────────────────────────"
+    check_existing
+    echo ""
+    
     echo -e "${CYAN}[PRÉPARATION]${NC}"
     echo "─────────────────────────────────────────────────────────────────"
-    cleanup_previous
-    update_system
-    install_dependencies
+    update_system; install_dependencies
     echo ""
     
-    # Installation
     echo -e "${CYAN}[INSTALLATION]${NC}"
     echo "─────────────────────────────────────────────────────────────────"
+    create_users; echo ""
+    install_snort; configure_snort; echo ""
+    install_wazuh; echo ""
+    configure_integration; echo ""
+    create_credentials_file; echo ""
     
-    # Objectif 1: Créer utilisateur Snort
-    create_snort_user
-    echo ""
-    
-    # Objectif 2: Créer utilisateur Wazuh
-    create_wazuh_user
-    echo ""
-    
-    # Objectif 4: Installer Snort
-    if ! install_snort; then
-        show_error
-        exit 1
-    fi
-    
-    # Configurer Snort
-    if ! configure_snort; then
-        log_warning "Problème configuration Snort"
-    fi
-    echo ""
-    
-    # Objectif 5: Installer Wazuh
-    if ! install_wazuh; then
-        show_error
-        exit 1
-    fi
-    echo ""
-    
-    # Objectif 6: Intégration Snort-Wazuh
-    configure_integration
-    echo ""
-    
-    # Objectif 7: Créer fichier credentials
-    create_credentials_file
-    echo ""
-    
-    # Résumé
     show_summary
-    
     log_info "Installation terminée - $(date)"
 }
 
-# Exécuter
 main "$@"
