@@ -208,7 +208,7 @@ Description=Snort IDS
 After=network.target
 [Service]
 Type=simple
-User=$SNORT_USER
+User=root
 ExecStart=/usr/sbin/snort -q -c /etc/snort/snort.conf -i $INTERFACE -A fast
 Restart=on-failure
 [Install]
