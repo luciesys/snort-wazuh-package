@@ -5,110 +5,349 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Toutes les Alertes - SIEM Africa</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+        
         :root {
-            --primary-color: #1a5f2a;
+            --primary-green: #1a5f2a;
+            --secondary-green: #2d8a3e;
         }
         
         body {
-            background-color: #f5f6fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            min-height: 100vh;
         }
         
         .navbar {
-            background: linear-gradient(135deg, var(--primary-color), #2d8a3e);
+            background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.4rem;
+        }
+        
+        .main-content {
+            padding: 25px;
+        }
+        
+        .page-header {
+            margin-bottom: 25px;
+        }
+        
+        .page-header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #333;
+            margin: 0;
+        }
+        
+        .page-header p {
+            color: #666;
+            margin: 5px 0 0;
         }
         
         .filter-card {
-            border-radius: 15px;
-            border: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            padding: 25px;
+            margin-bottom: 25px;
         }
         
-        .alert-row {
-            transition: background-color 0.2s;
+        .filter-card .form-label {
+            font-weight: 600;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        
+        .filter-card .form-select {
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            padding: 10px 15px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .filter-card .form-select:focus {
+            border-color: var(--secondary-green);
+            box-shadow: 0 0 0 3px rgba(45, 138, 62, 0.15);
+        }
+        
+        .btn-filter {
+            background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+            border: none;
+            padding: 10px 25px;
+            font-weight: 600;
+            border-radius: 10px;
+            color: white;
+            transition: all 0.3s;
+        }
+        
+        .btn-filter:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(26, 95, 42, 0.3);
+            color: white;
+        }
+        
+        .btn-reset {
+            background: #f0f0f0;
+            border: none;
+            padding: 10px 25px;
+            font-weight: 600;
+            border-radius: 10px;
+            color: #555;
+            transition: all 0.3s;
+        }
+        
+        .btn-reset:hover {
+            background: #e0e0e0;
+        }
+        
+        .alerts-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        
+        .alerts-card .card-header {
+            background: linear-gradient(135deg, #f8f9fa, #fff);
+            padding: 20px 25px;
+            border-bottom: 2px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .alerts-card .card-header h5 {
+            margin: 0;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .alert-count {
+            background: var(--primary-green);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        
+        .alert-table {
+            margin: 0;
+        }
+        
+        .alert-table thead th {
+            background: #f8f9fa;
+            border: none;
+            font-weight: 600;
+            font-size: 13px;
+            color: #555;
+            padding: 16px 20px;
+            white-space: nowrap;
+        }
+        
+        .alert-table tbody td {
+            padding: 16px 20px;
+            vertical-align: middle;
+            border-color: #f0f0f0;
+        }
+        
+        .alert-table tbody tr {
+            transition: background 0.2s;
             cursor: pointer;
         }
         
-        .alert-row:hover {
-            background-color: #e9ecef;
+        .alert-table tbody tr:hover {
+            background: #f8f9fa;
         }
         
-        .badge-critique { background-color: #dc3545; }
-        .badge-haute { background-color: #fd7e14; }
-        .badge-moyenne { background-color: #ffc107; color: #000; }
-        .badge-faible { background-color: #28a745; }
-        .badge-info { background-color: #17a2b8; }
+        .badge-gravite {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: 500;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
         
-        .status-nouveau { color: #dc3545; font-weight: bold; }
-        .status-vu { color: #fd7e14; }
-        .status-en_cours { color: #17a2b8; }
-        .status-traite { color: #28a745; }
-        .status-ignore { color: #6c757d; }
+        .badge-critique { background: #fee2e2; color: #dc2626; }
+        .badge-haute { background: #ffedd5; color: #ea580c; }
+        .badge-moyenne { background: #fef3c7; color: #d97706; }
+        .badge-faible { background: #d1fae5; color: #059669; }
+        .badge-info { background: #dbeafe; color: #2563eb; }
+        
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .status-nouveau { background: #fee2e2; color: #dc2626; }
+        .status-vu { background: #ffedd5; color: #ea580c; }
+        .status-en_cours { background: #dbeafe; color: #2563eb; }
+        .status-traite { background: #d1fae5; color: #059669; }
+        .status-ignore { background: #e5e7eb; color: #6b7280; }
+        .status-faux_positif { background: #e5e7eb; color: #6b7280; }
+        
+        .ip-badge {
+            background: #f0f0f0;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        
+        .category-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+        }
+        
+        .btn-details {
+            background: white;
+            border: 2px solid var(--primary-green);
+            color: var(--primary-green);
+            padding: 6px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .btn-details:hover {
+            background: var(--primary-green);
+            color: white;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+        
+        .empty-state .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .empty-state h5 {
+            color: #555;
+            margin-bottom: 10px;
+        }
+        
+        .pagination-info {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 14px;
+            border-top: 1px solid #f0f0f0;
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .animate-in {
+            animation: fadeIn 0.4s ease-out;
+        }
     </style>
 </head>
 <body>
+    <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
+        <div class="container-fluid px-4">
             <a class="navbar-brand" href="/">🛡️ SIEM AFRICA</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">← Tableau de Bord</a>
+            <div class="ms-auto d-flex gap-2">
+                <a href="/" class="btn btn-outline-light btn-sm">📊 Tableau de Bord</a>
+                <a href="/logout" class="btn btn-outline-light btn-sm">🚪 Déconnexion</a>
             </div>
         </div>
     </nav>
-
-    <div class="container mt-4">
-        <h2 class="mb-4">📋 Toutes les Alertes</h2>
-
-        <div class="card filter-card">
-            <div class="card-body">
-                <form method="GET" action="/alertes" class="row g-3 align-items-end">
-                    <div class="col-md-3">
-                        <label class="form-label">Gravité</label>
-                        <select name="gravite" class="form-select">
-                            <option value="">Toutes</option>
-                            <option value="critique" {% if filtre_gravite == 'critique' %}selected{% endif %}>🔴 Critique</option>
-                            <option value="haute" {% if filtre_gravite == 'haute' %}selected{% endif %}>🟠 Haute</option>
-                            <option value="moyenne" {% if filtre_gravite == 'moyenne' %}selected{% endif %}>🟡 Moyenne</option>
-                            <option value="faible" {% if filtre_gravite == 'faible' %}selected{% endif %}>🟢 Faible</option>
-                            <option value="info" {% if filtre_gravite == 'info' %}selected{% endif %}>ℹ️ Info</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Statut</label>
-                        <select name="statut" class="form-select">
-                            <option value="">Tous</option>
-                            <option value="nouveau" {% if filtre_statut == 'nouveau' %}selected{% endif %}>Nouveau</option>
-                            <option value="vu" {% if filtre_statut == 'vu' %}selected{% endif %}>Vu</option>
-                            <option value="en_cours" {% if filtre_statut == 'en_cours' %}selected{% endif %}>En cours</option>
-                            <option value="traite" {% if filtre_statut == 'traite' %}selected{% endif %}>Traité</option>
-                            <option value="ignore" {% if filtre_statut == 'ignore' %}selected{% endif %}>Ignoré</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Catégorie</label>
-                        <select name="categorie" class="form-select">
-                            <option value="">Toutes</option>
-                            {% for cat in categories %}
-                            <option value="{{ cat.nom }}" {% if filtre_categorie == cat.nom %}selected{% endif %}>
-                                {{ cat.nom }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <button type="submit" class="btn btn-primary w-100">🔍 Filtrer</button>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container-fluid">
+            <!-- Page Header -->
+            <div class="page-header animate-in">
+                <h1>📋 Toutes les Alertes</h1>
+                <p>Consultez et filtrez l'ensemble des alertes de sécurité</p>
+            </div>
+            
+            <!-- Filters -->
+            <div class="filter-card animate-in">
+                <form method="GET" action="/alertes">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label">🎯 Gravité</label>
+                            <select name="gravite" class="form-select">
+                                <option value="">Toutes les gravités</option>
+                                <option value="critique" {% if filtre_gravite == 'critique' %}selected{% endif %}>🔴 Critique</option>
+                                <option value="haute" {% if filtre_gravite == 'haute' %}selected{% endif %}>🟠 Haute</option>
+                                <option value="moyenne" {% if filtre_gravite == 'moyenne' %}selected{% endif %}>🟡 Moyenne</option>
+                                <option value="faible" {% if filtre_gravite == 'faible' %}selected{% endif %}>🟢 Faible</option>
+                                <option value="info" {% if filtre_gravite == 'info' %}selected{% endif %}>ℹ️ Info</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">📌 Statut</label>
+                            <select name="statut" class="form-select">
+                                <option value="">Tous les statuts</option>
+                                <option value="nouveau" {% if filtre_statut == 'nouveau' %}selected{% endif %}>🆕 Nouveau</option>
+                                <option value="vu" {% if filtre_statut == 'vu' %}selected{% endif %}>👁️ Vu</option>
+                                <option value="en_cours" {% if filtre_statut == 'en_cours' %}selected{% endif %}>🔄 En cours</option>
+                                <option value="traite" {% if filtre_statut == 'traite' %}selected{% endif %}>✅ Traité</option>
+                                <option value="ignore" {% if filtre_statut == 'ignore' %}selected{% endif %}>🚫 Ignoré</option>
+                                <option value="faux_positif" {% if filtre_statut == 'faux_positif' %}selected{% endif %}>❌ Faux positif</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">🏷️ Catégorie</label>
+                            <select name="categorie" class="form-select">
+                                <option value="">Toutes les catégories</option>
+                                {% for cat in categories %}
+                                <option value="{{ cat.nom }}" {% if filtre_categorie == cat.nom %}selected{% endif %}>
+                                    {{ cat.nom }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-filter flex-grow-1">
+                                    🔍 Filtrer
+                                </button>
+                                <a href="/alertes" class="btn btn-reset">
+                                    ↺
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
-        </div>
-
-        <div class="card">
-            <div class="card-body p-0">
+            
+            <!-- Alerts Table -->
+            <div class="alerts-card animate-in">
+                <div class="card-header">
+                    <h5>🚨 Liste des Alertes</h5>
+                    <span class="alert-count">{{ alertes|length }} alerte(s)</span>
+                </div>
+                
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
+                    <table class="table alert-table">
+                        <thead>
                             <tr>
                                 <th>Gravité</th>
                                 <th>Date/Heure</th>
@@ -122,9 +361,9 @@
                         <tbody>
                             {% for alerte in alertes %}
                             {% set ginfo = get_gravite_info(alerte.gravite) %}
-                            <tr class="alert-row">
+                            <tr onclick="window.location='/alerte/{{ alerte.id }}'">
                                 <td>
-                                    <span class="badge badge-{{ alerte.gravite }}">
+                                    <span class="badge-gravite badge-{{ alerte.gravite }}">
                                         {{ ginfo.icon }} {{ ginfo.label }}
                                     </span>
                                 </td>
@@ -132,43 +371,54 @@
                                     <small>{{ format_timestamp(alerte.timestamp) }}</small>
                                 </td>
                                 <td>
-                                    {{ alerte.nom_alerte[:50] }}{% if alerte.nom_alerte|length > 50 %}...{% endif %}
+                                    <span title="{{ alerte.nom_alerte }}">
+                                        {{ alerte.nom_alerte[:40] }}{% if alerte.nom_alerte|length > 40 %}...{% endif %}
+                                    </span>
                                 </td>
                                 <td>
-                                    <span title="{{ alerte.categorie }}">{{ alerte.icone }} {{ alerte.categorie[:15] }}</span>
+                                    <span class="category-badge">
+                                        {{ alerte.icone }} {{ alerte.categorie[:15] }}
+                                    </span>
                                 </td>
                                 <td>
-                                    <code>{{ alerte.source_ip or 'N/A' }}</code>
+                                    <code class="ip-badge">{{ alerte.source_ip or 'N/A' }}</code>
                                 </td>
                                 <td>
-                                    <span class="status-{{ alerte.statut }}">
+                                    <span class="status-badge status-{{ alerte.statut }}">
                                         {{ alerte.statut|capitalize }}
                                     </span>
                                 </td>
                                 <td>
-                                    <a href="/alerte/{{ alerte.id }}" class="btn btn-sm btn-outline-primary">
-                                        Détails
+                                    <a href="/alerte/{{ alerte.id }}" class="btn-details" onclick="event.stopPropagation()">
+                                        Détails →
                                     </a>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-5">
-                                    ✅ Aucune alerte correspondant aux critères
+                                <td colspan="7">
+                                    <div class="empty-state">
+                                        <div class="icon">✅</div>
+                                        <h5>Aucune alerte trouvée</h5>
+                                        <p>Aucune alerte ne correspond à vos critères de recherche.</p>
+                                        <a href="/alertes" class="btn btn-filter mt-3">Réinitialiser les filtres</a>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+                
+                {% if alertes %}
+                <div class="pagination-info">
+                    Affichage de <strong>{{ alertes|length }}</strong> alerte(s)
+                </div>
+                {% endif %}
             </div>
         </div>
-
-        <div class="text-center text-muted mt-3">
-            {{ alertes|length }} alerte(s) affichée(s)
-        </div>
     </div>
-
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
