@@ -282,13 +282,19 @@ get_wazuh_credentials() {
     WAZUH_USER="wazuh"
     WAZUH_PASS=""
     
-    # Chercher le mot de passe dans différents emplacements
+    # Format 1: WAZUH : wazuh / wazuh123 (sudo)
     if [ -f "/root/siem_credentials.txt" ]; then
-        WAZUH_PASS=$(grep "API Password" /root/siem_credentials.txt 2>/dev/null | cut -d':' -f2 | tr -d ' ' || true)
+        WAZUH_PASS=$(grep "^WAZUH" /root/siem_credentials.txt 2>/dev/null | awk -F'/' '{print $2}' | awk '{print $1}' | tr -d ' ' || true)
     fi
     
+    # Format 2: wazuh-passwords.txt
     if [ -z "$WAZUH_PASS" ] && [ -f "/root/wazuh-install-files/wazuh-passwords.txt" ]; then
-        WAZUH_PASS=$(grep "wazuh " /root/wazuh-install-files/wazuh-passwords.txt 2>/dev/null | awk '{print $NF}' || true)
+        WAZUH_PASS=$(grep -E "^wazuh " /root/wazuh-install-files/wazuh-passwords.txt 2>/dev/null | awk '{print $NF}' || true)
+    fi
+    
+    # Format 3: API Password: xxxxx
+    if [ -z "$WAZUH_PASS" ] && [ -f "/root/siem_credentials.txt" ]; then
+        WAZUH_PASS=$(grep "API Password" /root/siem_credentials.txt 2>/dev/null | cut -d':' -f2 | tr -d ' ' || true)
     fi
     
     if [ -z "$WAZUH_PASS" ]; then
@@ -296,6 +302,8 @@ get_wazuh_credentials() {
         echo -n "Entrez le mot de passe de l'API Wazuh: "
         read -s WAZUH_PASS
         echo ""
+    else
+        log_success "Mot de passe Wazuh trouvé automatiquement"
     fi
     
     # Créer le fichier de configuration
