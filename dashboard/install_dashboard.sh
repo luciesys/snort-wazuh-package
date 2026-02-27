@@ -8,6 +8,7 @@
 # - HTTPS avec certificat auto-signé
 # - Authentification obligatoire
 # - Mise à jour automatique
+# - Détection automatique des credentials Wazuh
 # =============================================================================
 
 set -e
@@ -31,7 +32,7 @@ VENV_DIR="$INSTALL_DIR/venv"
 GITHUB_BASE="https://raw.githubusercontent.com/luciesys/snort-wazuh-package/main"
 CRIDS_FILE="/root/SIEM_AFRICA_CRIDS.txt"
 
-# Mot de passe par défaut
+# Mot de passe par défaut Dashboard
 DEFAULT_PASSWORD="SiemAfrica2026!"
 
 # =============================================================================
@@ -273,7 +274,7 @@ setup_python_env() {
 }
 
 # =============================================================================
-# CONFIGURATION WAZUH
+# CONFIGURATION WAZUH - DÉTECTION AUTOMATIQUE
 # =============================================================================
 
 get_wazuh_credentials() {
@@ -282,28 +283,63 @@ get_wazuh_credentials() {
     WAZUH_USER="wazuh"
     WAZUH_PASS=""
     
-    # Format 1: WAZUH : wazuh / wazuh123 (sudo)
-    if [ -f "/root/siem_credentials.txt" ]; then
-        WAZUH_PASS=$(grep "^WAZUH" /root/siem_credentials.txt 2>/dev/null | awk -F'/' '{print $2}' | awk '{print $1}' | tr -d ' ' || true)
+    # =========================================================================
+    # MÉTHODE 1: Format "WAZUH : wazuh / wazuh123 (sudo)"
+    # =========================================================================
+    if [ -z "$WAZUH_PASS" ] && [ -f "/root/siem_credentials.txt" ]; then
+        WAZUH_PASS=$(grep -i "^WAZUH" /root/siem_credentials.txt 2>/dev/null | awk -F'/' '{print $2}' | awk '{print $1}' | tr -d ' ' || true)
+        if [ -n "$WAZUH_PASS" ]; then
+            log_success "Mot de passe trouvé dans siem_credentials.txt (format WAZUH)"
+        fi
     fi
     
-    # Format 2: wazuh-passwords.txt
+    # =========================================================================
+    # MÉTHODE 2: Format "API Password: xxxxx"
+    # =========================================================================
+    if [ -z "$WAZUH_PASS" ] && [ -f "/root/siem_credentials.txt" ]; then
+        WAZUH_PASS=$(grep -i "API Password" /root/siem_credentials.txt 2>/dev/null | cut -d':' -f2 | tr -d ' ' || true)
+        if [ -n "$WAZUH_PASS" ]; then
+            log_success "Mot de passe trouvé dans siem_credentials.txt (format API Password)"
+        fi
+    fi
+    
+    # =========================================================================
+    # MÉTHODE 3: Fichier wazuh-passwords.txt format "wazuh xxxxx"
+    # =========================================================================
     if [ -z "$WAZUH_PASS" ] && [ -f "/root/wazuh-install-files/wazuh-passwords.txt" ]; then
         WAZUH_PASS=$(grep -E "^wazuh " /root/wazuh-install-files/wazuh-passwords.txt 2>/dev/null | awk '{print $NF}' || true)
+        if [ -n "$WAZUH_PASS" ]; then
+            log_success "Mot de passe trouvé dans wazuh-passwords.txt"
+        fi
     fi
     
-    # Format 3: API Password: xxxxx
-    if [ -z "$WAZUH_PASS" ] && [ -f "/root/siem_credentials.txt" ]; then
-        WAZUH_PASS=$(grep "API Password" /root/siem_credentials.txt 2>/dev/null | cut -d':' -f2 | tr -d ' ' || true)
+    # =========================================================================
+    # MÉTHODE 4: Fichier wazuh-passwords.txt format "  wazuh: xxxxx"
+    # =========================================================================
+    if [ -z "$WAZUH_PASS" ] && [ -f "/root/wazuh-install-files/wazuh-passwords.txt" ]; then
+        WAZUH_PASS=$(grep -E "wazuh:" /root/wazuh-install-files/wazuh-passwords.txt 2>/dev/null | awk -F':' '{print $2}' | tr -d ' ' || true)
+        if [ -n "$WAZUH_PASS" ]; then
+            log_success "Mot de passe trouvé dans wazuh-passwords.txt (format wazuh:)"
+        fi
     fi
     
+    # =========================================================================
+    # MÉTHODE 5: Chercher dans /var/ossec/etc/
+    # =========================================================================
+    if [ -z "$WAZUH_PASS" ] && [ -f "/var/ossec/etc/wazuh-api.conf" ]; then
+        WAZUH_PASS=$(grep -i "password" /var/ossec/etc/wazuh-api.conf 2>/dev/null | cut -d'=' -f2 | tr -d ' "' || true)
+        if [ -n "$WAZUH_PASS" ]; then
+            log_success "Mot de passe trouvé dans wazuh-api.conf"
+        fi
+    fi
+    
+    # =========================================================================
+    # MÉTHODE 6: Mot de passe par défaut wazuh123
+    # =========================================================================
     if [ -z "$WAZUH_PASS" ]; then
-        log_warning "Mot de passe Wazuh API non trouvé automatiquement"
-        echo -n "Entrez le mot de passe de l'API Wazuh: "
-        read -s WAZUH_PASS
-        echo ""
-    else
-        log_success "Mot de passe Wazuh trouvé automatiquement"
+        log_warning "Mot de passe non trouvé automatiquement"
+        log_info "Utilisation du mot de passe par défaut: wazuh123"
+        WAZUH_PASS="wazuh123"
     fi
     
     # Créer le fichier de configuration
@@ -571,8 +607,10 @@ create_crids_file() {
 ║                              SUPPORT                                         ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-  📧 Projet: SIEM AFRICA
+  📧 Projet: SIEM Africa - IUT de Douala
   📅 Version: 2.0
+  🔗 GitHub: https://github.com/luciesys/snort-wazuh-package
+
 ================================================================================
                     FIN DU FICHIER CRIDS - SIEM AFRICA
 ================================================================================
@@ -619,10 +657,10 @@ print_summary() {
     echo -e "${YELLOW}║  Toutes les informations et commandes ont été sauvegardées  ║${NC}"
     echo -e "${YELLOW}║  dans le fichier:                                           ║${NC}"
     echo -e "${YELLOW}║                                                              ║${NC}"
-    echo -e "${YELLOW}║     ${GREEN}$CRIDS_FILE${YELLOW}                    ║${NC}"
+    echo -e "${YELLOW}║     ${GREEN}/root/SIEM_AFRICA_CRIDS.txt${YELLOW}                         ║${NC}"
     echo -e "${YELLOW}║                                                              ║${NC}"
     echo -e "${YELLOW}║  Pour consulter ce fichier:                                 ║${NC}"
-    echo -e "${YELLOW}║     ${GREEN}cat $CRIDS_FILE${YELLOW}                    ║${NC}"
+    echo -e "${YELLOW}║     ${GREEN}cat /root/SIEM_AFRICA_CRIDS.txt${YELLOW}                     ║${NC}"
     echo -e "${YELLOW}║                                                              ║${NC}"
     echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
@@ -636,6 +674,10 @@ print_summary() {
     echo -e "${CYAN}║  ${GREEN}cat /root/SIEM_AFRICA_CRIDS.txt${CYAN}           → Voir CRIDS   ║${NC}"
     echo -e "${CYAN}║                                                              ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}📝 Note: Le navigateur affichera un avertissement car le${NC}"
+    echo -e "${YELLOW}   certificat SSL est auto-signé. Cliquez sur 'Avancé'${NC}"
+    echo -e "${YELLOW}   puis 'Continuer vers le site'.${NC}"
     echo ""
     echo -e "${GREEN}🎉 Installation terminée ! Accédez au dashboard :${NC}"
     echo -e "${GREEN}   ${YELLOW}https://$IP_ADDR:5000${NC}"
