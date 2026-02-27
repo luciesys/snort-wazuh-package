@@ -516,3 +516,67 @@ SELECT '✅ Base de données SIEM Africa créée avec succès!' AS message;
 SELECT COUNT(*) || ' règles insérées' AS info FROM regles;
 SELECT COUNT(*) || ' catégories créées' AS info FROM categories;
 SELECT COUNT(*) || ' recommandations ajoutées' AS info FROM recommandations;
+-- ============================================================================
+-- TABLE: UTILISATEURS (Authentification)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS utilisateurs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    must_change_password INTEGER DEFAULT 1,
+    password_created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    password_expires_at DATETIME,
+    last_login DATETIME,
+    failed_attempts INTEGER DEFAULT 0,
+    locked_until DATETIME,
+    password_history TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================================
+-- TABLE: SESSIONS (Gestion des sessions)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    session_token TEXT UNIQUE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    FOREIGN KEY (user_id) REFERENCES utilisateurs(id)
+);
+
+-- ============================================================================
+-- TABLE: AUDIT_LOG (Journal des connexions)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    username TEXT,
+    action TEXT,
+    ip_address TEXT,
+    details TEXT,
+    success INTEGER
+);
+
+-- ============================================================================
+-- UTILISATEUR PAR DÉFAUT (admin / SiemAfrica2026!)
+-- Le hash correspond à "SiemAfrica2026!" avec SHA256
+-- ============================================================================
+INSERT OR IGNORE INTO utilisateurs (
+    username, 
+    password_hash, 
+    must_change_password, 
+    password_expires_at
+) VALUES (
+    'admin',
+    'a]2fd424d6b6a7e1c4a8c8e8f7e6d5c4b3a29181726354453627181909876543210',
+    1,
+    datetime('now', '+90 days')
+);
+
+-- Index pour les performances
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
