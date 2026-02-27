@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIEM Africa - Tableau de Bord</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #1a5f2a;
+            --secondary-color: #ffd700;
+            --dark-bg: #1a1a2e;
+        }
+        
+        body {
+            background-color: #f5f6fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color), #2d8a3e);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        .stat-card {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        
+        .stat-card.critique { border-left: 5px solid #dc3545; }
+        .stat-card.haute { border-left: 5px solid #fd7e14; }
+        .stat-card.moyenne { border-left: 5px solid #ffc107; }
+        .stat-card.faible { border-left: 5px solid #28a745; }
+        
+        .alert-row {
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        
+        .alert-row:hover {
+            background-color: #e9ecef;
+        }
+        
+        .badge-critique { background-color: #dc3545; }
+        .badge-haute { background-color: #fd7e14; }
+        .badge-moyenne { background-color: #ffc107; color: #000; }
+        .badge-faible { background-color: #28a745; }
+        .badge-info { background-color: #17a2b8; }
+        
+        .status-nouveau { color: #dc3545; font-weight: bold; }
+        .status-vu { color: #fd7e14; }
+        .status-en_cours { color: #17a2b8; }
+        .status-traite { color: #28a745; }
+        
+        .category-badge {
+            font-size: 0.9rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+            background-color: #e9ecef;
+        }
+        
+        .footer {
+            background-color: var(--dark-bg);
+            color: #fff;
+            padding: 20px 0;
+            margin-top: 50px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">🛡️ SIEM AFRICA</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">Tableau de Bord</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/alertes">Toutes les Alertes</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center text-white">
+                    <span class="me-3">{{ total_alertes }} alertes actives</span>
+                    <button class="btn btn-outline-light btn-sm" onclick="location.reload()" title="Actualiser">
+                        🔄 Actualiser
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="card stat-card critique">
+                    <div class="card-body text-center">
+                        <div class="stat-number text-danger">{{ stats_gravite.get('critique', 0) }}</div>
+                        <div class="text-muted">🔴 Critique</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card stat-card haute">
+                    <div class="card-body text-center">
+                        <div class="stat-number" style="color: #fd7e14;">{{ stats_gravite.get('haute', 0) }}</div>
+                        <div class="text-muted">🟠 Haute</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card stat-card moyenne">
+                    <div class="card-body text-center">
+                        <div class="stat-number" style="color: #ffc107;">{{ stats_gravite.get('moyenne', 0) }}</div>
+                        <div class="text-muted">🟡 Moyenne</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card stat-card faible">
+                    <div class="card-body text-center">
+                        <div class="stat-number text-success">{{ stats_gravite.get('faible', 0) + stats_gravite.get('info', 0) }}</div>
+                        <div class="text-muted">🟢 Faible/Info</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-8 mb-4">
+                <div class="card">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">📋 Dernières Alertes</h5>
+                        <a href="/alertes" class="btn btn-sm btn-outline-primary">Voir tout</a>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Gravité</th>
+                                        <th>Heure</th>
+                                        <th>Alerte</th>
+                                        <th>Source</th>
+                                        <th>Statut</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for alerte in alertes %}
+                                    {% set ginfo = get_gravite_info(alerte.gravite) %}
+                                    <tr class="alert-row" onclick="window.location='/alerte/{{ alerte.id }}'">
+                                        <td>
+                                            <span class="badge badge-{{ alerte.gravite }}">
+                                                {{ ginfo.icon }} {{ ginfo.label }}
+                                            </span>
+                                        </td>
+                                        <td><small>{{ alerte.timestamp|timeago }}</small></td>
+                                        <td>
+                                            <span class="category-badge me-2">{{ alerte.icone }}</span>
+                                            {{ alerte.nom_alerte[:40] }}{% if alerte.nom_alerte|length > 40 %}...{% endif %}
+                                        </td>
+                                        <td><code>{{ alerte.source_ip or 'N/A' }}</code></td>
+                                        <td><span class="status-{{ alerte.statut }}">{{ alerte.statut|capitalize }}</span></td>
+                                        <td><a href="/alerte/{{ alerte.id }}" class="btn btn-sm btn-outline-secondary">Voir</a></td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted py-4">
+                                            ✅ Aucune alerte active - Système sécurisé
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">📊 Par Catégorie</h5>
+                    </div>
+                    <div class="card-body">
+                        {% for cat in stats_categories %}
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <span class="me-2">{{ cat.icone }}</span>
+                                {{ cat.categorie }}
+                            </div>
+                            <span class="badge bg-secondary">{{ cat.total }}</span>
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-center">Aucune donnée</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">ℹ️ Système</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2"><strong>Agent:</strong> <span class="text-success">● Actif</span></p>
+                        <p class="mb-2"><strong>Wazuh:</strong> <span class="text-success">● Connecté</span></p>
+                        <p class="mb-0"><strong>Dernière MAJ:</strong> <small>{{ "maintenant" }}</small></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer text-center">
+        <div class="container">
+            <p class="mb-0">🛡️ <strong>SIEM AFRICA</strong> - Solution de Cybersécurité pour l'Afrique</p>
+            <small class="text-muted">IUT de Douala - 2026</small>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        setTimeout(function() {
+            location.reload();
+        }, 60000);
+    </script>
+</body>
+</html>
