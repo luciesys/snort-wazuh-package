@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Détail Alerte - SIEM Africa</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #1a5f2a;
+        }
+        
+        body {
+            background-color: #f5f6fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color), #2d8a3e);
+        }
+        
+        .alert-header {
+            border-radius: 15px;
+            padding: 25px;
+            color: white;
+            margin-bottom: 20px;
+        }
+        
+        .alert-header.critique { background: linear-gradient(135deg, #dc3545, #c82333); }
+        .alert-header.haute { background: linear-gradient(135deg, #fd7e14, #e8590c); }
+        .alert-header.moyenne { background: linear-gradient(135deg, #ffc107, #e0a800); color: #000; }
+        .alert-header.faible { background: linear-gradient(135deg, #28a745, #1e7e34); }
+        .alert-header.info { background: linear-gradient(135deg, #17a2b8, #138496); }
+        
+        .info-card {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .info-card .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            font-weight: bold;
+        }
+        
+        .recommendation-item {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .recommendation-item.debutant { border-left-color: #28a745; }
+        .recommendation-item.intermediaire { border-left-color: #ffc107; }
+        .recommendation-item.avance { border-left-color: #dc3545; }
+        
+        .command-box {
+            background-color: #1a1a2e;
+            color: #00ff00;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            position: relative;
+        }
+        
+        .command-box .copy-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+        }
+        
+        .badge-niveau {
+            font-size: 0.7rem;
+            padding: 3px 8px;
+        }
+        
+        .detail-row {
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        
+        .mitre-link {
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #495057;
+        }
+        
+        .mitre-link:hover {
+            background-color: #dee2e6;
+        }
+        
+        .action-buttons .btn {
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">🛡️ SIEM AFRICA</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">← Retour au Tableau de Bord</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% set ginfo = get_gravite_info(alerte.gravite) %}
+        
+        <div class="alert-header {{ alerte.gravite }}">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2 class="mb-2">{{ ginfo.icon }} {{ alerte.nom_alerte }}</h2>
+                    <p class="mb-0 opacity-75">
+                        <span class="me-3">📅 {{ format_timestamp(alerte.timestamp) }}</span>
+                        <span class="me-3">🏷️ {{ alerte.categorie }}</span>
+                        <span>📊 Rule ID: {{ alerte.wazuh_rule_id }}</span>
+                    </p>
+                </div>
+                <div class="col-md-4 text-md-end">
+                    <span class="badge bg-light text-dark fs-5 px-4 py-2">{{ ginfo.label|upper }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card info-card">
+                    <div class="card-header">📝 Description</div>
+                    <div class="card-body">
+                        <p class="mb-0">{{ alerte.description_fr }}</p>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card info-card">
+                            <div class="card-header">⚠️ Impact Potentiel</div>
+                            <div class="card-body">
+                                <p class="mb-0">{{ alerte.impact or 'Non spécifié' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card info-card">
+                            <div class="card-header">🔍 Cause Probable</div>
+                            <div class="card-body">
+                                <p class="mb-0">{{ alerte.cause_probable or 'Non spécifiée' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card info-card">
+                    <div class="card-header">🔧 Recommandations</div>
+                    <div class="card-body">
+                        {% for rec in recommandations %}
+                        <div class="recommendation-item {{ rec.niveau }}">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <strong>{{ loop.index }}. {{ rec.action }}</strong>
+                                <span class="badge badge-niveau 
+                                    {% if rec.niveau == 'debutant' %}bg-success
+                                    {% elif rec.niveau == 'intermediaire' %}bg-warning text-dark
+                                    {% else %}bg-danger{% endif %}">
+                                    {{ rec.niveau|capitalize }}
+                                </span>
+                            </div>
+                            {% if rec.commande %}
+                            <div class="command-box">
+                                <code>{{ rec.commande }}</code>
+                                <button class="copy-btn" onclick="copyCommand(this)" title="Copier">📋</button>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted">Aucune recommandation spécifique disponible.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card info-card">
+                    <div class="card-header">🖥️ Détails Techniques</div>
+                    <div class="card-body">
+                        <div class="detail-row">
+                            <small class="text-muted">Adresse IP Source</small>
+                            <div><code>{{ alerte.source_ip or 'N/A' }}</code></div>
+                        </div>
+                        <div class="detail-row">
+                            <small class="text-muted">Port Source</small>
+                            <div>{{ alerte.source_port or 'N/A' }}</div>
+                        </div>
+                        <div class="detail-row">
+                            <small class="text-muted">Adresse IP Destination</small>
+                            <div><code>{{ alerte.dest_ip or 'N/A' }}</code></div>
+                        </div>
+                        <div class="detail-row">
+                            <small class="text-muted">Port Destination</small>
+                            <div>{{ alerte.dest_port or 'N/A' }}</div>
+                        </div>
+                        <div class="detail-row">
+                            <small class="text-muted">Agent</small>
+                            <div>{{ alerte.agent_name or 'N/A' }}</div>
+                        </div>
+                        <div class="detail-row">
+                            <small class="text-muted">Utilisateur</small>
+                            <div>{{ alerte.utilisateur or 'N/A' }}</div>
+                        </div>
+                        {% if alerte.mitre_id %}
+                        <div class="detail-row">
+                            <small class="text-muted">MITRE ATT&CK</small>
+                            <div>
+                                <a href="https://attack.mitre.org/techniques/{{ alerte.mitre_id }}/" 
+                                   target="_blank" class="mitre-link">{{ alerte.mitre_id }} ↗</a>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card info-card">
+                    <div class="card-header">⚡ Actions</div>
+                    <div class="card-body">
+                        <p class="mb-3">
+                            <strong>Statut actuel:</strong> 
+                            <span class="badge 
+                                {% if alerte.statut == 'nouveau' %}bg-danger
+                                {% elif alerte.statut == 'vu' %}bg-warning text-dark
+                                {% elif alerte.statut == 'en_cours' %}bg-info
+                                {% elif alerte.statut == 'traite' %}bg-success
+                                {% else %}bg-secondary{% endif %}">
+                                {{ alerte.statut|capitalize }}
+                            </span>
+                        </p>
+                        
+                        <form action="/alerte/{{ alerte.id }}/action" method="POST">
+                            <div class="mb-3">
+                                <textarea class="form-control" name="note" rows="2" 
+                                    placeholder="Ajouter une note (optionnel)"></textarea>
+                            </div>
+                            <div class="action-buttons">
+                                <button type="submit" name="action" value="traite" class="btn btn-success btn-sm">✅ Marquer Traité</button>
+                                <button type="submit" name="action" value="en_cours" class="btn btn-info btn-sm">🔄 En Cours</button>
+                                <button type="submit" name="action" value="ignore" class="btn btn-secondary btn-sm">🚫 Ignorer</button>
+                                <button type="submit" name="action" value="faux_positif" class="btn btn-outline-secondary btn-sm">❌ Faux Positif</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card info-card">
+                    <div class="card-header">📄 Log Original Wazuh</div>
+                    <div class="card-body">
+                        <small class="text-muted">{{ alerte.description_wazuh or 'Non disponible' }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center my-4">
+            <a href="/" class="btn btn-outline-primary btn-lg">← Retour au Tableau de Bord</a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function copyCommand(btn) {
+            const command = btn.parentElement.querySelector('code').textContent;
+            navigator.clipboard.writeText(command).then(() => {
+                btn.textContent = '✅';
+                setTimeout(() => btn.textContent = '📋', 2000);
+            });
+        }
+    </script>
+</body>
+</html>
