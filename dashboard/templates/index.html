@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Détail Alerte - SIEM Africa</title>
+    <title>SIEM Africa - Tableau de Bord</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             font-family: 'Poppins', sans-serif;
@@ -14,6 +15,8 @@
         :root {
             --primary-green: #1a5f2a;
             --secondary-green: #2d8a3e;
+            --light-green: #e8f5e9;
+            --dark-bg: #1a1a2e;
         }
         
         body {
@@ -24,478 +27,790 @@
         .navbar {
             background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            padding: 12px 0;
         }
         
         .navbar-brand {
             font-weight: 700;
-            font-size: 1.4rem;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .navbar-brand .logo {
+            font-size: 1.8rem;
+        }
+        
+        .nav-link {
+            font-weight: 500;
+            padding: 8px 16px !important;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255,255,255,0.15);
+        }
+        
+        .user-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .password-warning {
+            border-radius: 0;
+            margin: 0;
+            border: none;
+            padding: 12px 20px;
+            font-weight: 500;
         }
         
         .main-content {
             padding: 25px;
         }
         
-        .alert-header {
-            border-radius: 16px;
-            padding: 30px;
-            color: white;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        }
-        
-        .alert-header.critique { background: linear-gradient(135deg, #dc3545, #c82333); }
-        .alert-header.haute { background: linear-gradient(135deg, #fd7e14, #e8590c); }
-        .alert-header.moyenne { background: linear-gradient(135deg, #ffc107, #e0a800); color: #000; }
-        .alert-header.faible { background: linear-gradient(135deg, #28a745, #1e7e34); }
-        .alert-header.info { background: linear-gradient(135deg, #17a2b8, #138496); }
-        
-        .alert-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-        
-        .alert-meta {
-            opacity: 0.9;
-            font-size: 14px;
-        }
-        
-        .alert-meta span {
-            margin-right: 20px;
-        }
-        
-        .severity-badge {
-            background: rgba(255,255,255,0.25);
-            padding: 10px 25px;
-            border-radius: 30px;
-            font-size: 18px;
-            font-weight: 600;
-        }
-        
-        .info-card {
+        .dashboard-card {
             background: white;
             border-radius: 16px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
+            border: none;
             overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+            height: 100%;
         }
         
-        .info-card .card-header {
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+        
+        .card-header-custom {
             background: linear-gradient(135deg, #f8f9fa, #fff);
             padding: 16px 20px;
             border-bottom: 2px solid #f0f0f0;
             font-weight: 600;
             font-size: 15px;
-        }
-        
-        .info-card .card-body {
-            padding: 20px;
-        }
-        
-        .recommendation-item {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 15px;
-            border-left: 4px solid var(--primary-green);
-            transition: transform 0.2s;
-        }
-        
-        .recommendation-item:hover {
-            transform: translateX(5px);
-        }
-        
-        .recommendation-item.debutant { border-left-color: #28a745; }
-        .recommendation-item.intermediaire { border-left-color: #ffc107; }
-        .recommendation-item.avance { border-left-color: #dc3545; }
-        
-        .recommendation-title {
-            font-weight: 600;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        
-        .command-box {
-            background: #1a1a2e;
-            color: #00ff00;
-            padding: 15px 20px;
-            border-radius: 10px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            margin-top: 12px;
-            position: relative;
-            overflow-x: auto;
-        }
-        
-        .command-box code {
-            color: #00ff00;
-        }
-        
-        .copy-btn {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: rgba(255,255,255,0.1);
-            border: none;
-            color: #fff;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        
-        .copy-btn:hover {
-            background: rgba(255,255,255,0.2);
-        }
-        
-        .badge-niveau {
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 12px;
-        }
-        
-        .detail-item {
-            padding: 12px 0;
-            border-bottom: 1px solid #f0f0f0;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .detail-item:last-child {
-            border-bottom: none;
-        }
-        
-        .detail-label {
-            font-size: 12px;
-            color: #888;
-            margin-bottom: 4px;
-        }
-        
-        .detail-value {
-            font-size: 14px;
-            font-weight: 500;
-        }
-        
-        .detail-value code {
-            background: #f0f0f0;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-        
-        .mitre-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            background: #e3f2fd;
-            padding: 6px 12px;
-            border-radius: 8px;
-            text-decoration: none;
-            color: #1976d2;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-        
-        .mitre-link:hover {
-            background: #bbdefb;
-            color: #1565c0;
-        }
-        
-        .action-card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            overflow: hidden;
-        }
-        
-        .action-card .card-header {
-            background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
-            color: white;
-            padding: 16px 20px;
-            font-weight: 600;
-        }
-        
-        .action-card .card-body {
-            padding: 20px;
-        }
-        
-        .status-current {
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
         }
         
-        .status-badge {
-            padding: 6px 14px;
-            border-radius: 20px;
+        .security-score-card {
+            background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+        }
+        
+        .score-circle {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            border: 8px solid rgba(255,255,255,0.3);
+        }
+        
+        .score-value {
+            font-size: 48px;
+            font-weight: 700;
+        }
+        
+        .score-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .score-status {
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 25px 15px;
+            border-radius: 16px;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+            height: 100%;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card.critique { border-top: 4px solid #dc3545; }
+        .stat-card.haute { border-top: 4px solid #fd7e14; }
+        .stat-card.moyenne { border-top: 4px solid #ffc107; }
+        .stat-card.faible { border-top: 4px solid #28a745; }
+        
+        .stat-number {
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            font-size: 13px;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .stat-card.critique .stat-number { color: #dc3545; }
+        .stat-card.haute .stat-number { color: #fd7e14; }
+        .stat-card.moyenne .stat-number { color: #ffc107; }
+        .stat-card.faible .stat-number { color: #28a745; }
+        
+        .today-stats {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 16px;
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .today-number {
+            font-size: 48px;
+            font-weight: 700;
+        }
+        
+        .today-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .alert-table {
+            margin: 0;
+        }
+        
+        .alert-table thead th {
+            background: #f8f9fa;
+            border: none;
             font-weight: 600;
             font-size: 13px;
+            color: #555;
+            padding: 14px 16px;
+        }
+        
+        .alert-table tbody td {
+            padding: 14px 16px;
+            vertical-align: middle;
+            border-color: #f0f0f0;
+        }
+        
+        .alert-table tbody tr {
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+        
+        .alert-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .badge-gravite {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 500;
+            font-size: 12px;
+        }
+        
+        .badge-critique { background: #fee2e2; color: #dc2626; }
+        .badge-haute { background: #ffedd5; color: #ea580c; }
+        .badge-moyenne { background: #fef3c7; color: #d97706; }
+        .badge-faible { background: #d1fae5; color: #059669; }
+        .badge-info { background: #dbeafe; color: #2563eb; }
+        
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
         }
         
         .status-nouveau { background: #fee2e2; color: #dc2626; }
         .status-vu { background: #ffedd5; color: #ea580c; }
         .status-en_cours { background: #dbeafe; color: #2563eb; }
         .status-traite { background: #d1fae5; color: #059669; }
-        .status-ignore { background: #e5e7eb; color: #6b7280; }
         
-        .action-buttons {
+        .top-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .top-list li {
             display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .action-buttons .btn {
-            flex: 1;
-            min-width: 120px;
-            padding: 10px 15px;
-            font-weight: 500;
-            border-radius: 10px;
-        }
-        
-        .btn-back {
-            background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
-            color: white;
-            padding: 12px 30px;
-            border-radius: 10px;
-            font-weight: 600;
-            text-decoration: none;
-            display: inline-flex;
             align-items: center;
-            gap: 8px;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+        }
+        
+        .top-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .top-list li:hover {
+            background: #f8f9fa;
+        }
+        
+        .top-rank {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--light-green);
+            color: var(--primary-green);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 13px;
+            margin-right: 12px;
+        }
+        
+        .top-rank.gold { background: #fef3c7; color: #d97706; }
+        .top-rank.silver { background: #e5e7eb; color: #6b7280; }
+        .top-rank.bronze { background: #ffedd5; color: #ea580c; }
+        
+        .top-value {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #333;
+        }
+        
+        .top-count {
+            background: #f0f0f0;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .chart-container {
+            padding: 20px;
+            height: 250px;
+        }
+        
+        .category-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .category-item:last-child {
+            border-bottom: none;
+        }
+        
+        .category-icon {
+            font-size: 20px;
+            margin-right: 12px;
+        }
+        
+        .category-name {
+            flex: 1;
+            font-size: 14px;
+        }
+        
+        .category-count {
+            background: var(--light-green);
+            color: var(--primary-green);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .system-status {
+            padding: 16px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.active { background: #22c55e; }
+        .status-dot.warning { background: #f59e0b; }
+        .status-dot.error { background: #ef4444; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .dashboard-footer {
+            background: var(--dark-bg);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .dashboard-footer p {
+            margin: 0;
+            opacity: 0.8;
+            font-size: 14px;
+        }
+        
+        .btn-refresh {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
             transition: all 0.3s;
         }
         
-        .btn-back:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(26, 95, 42, 0.3);
+        .btn-refresh:hover {
+            background: rgba(255,255,255,0.3);
             color: white;
         }
         
-        .raw-log {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 13px;
-            color: #666;
-            max-height: 150px;
-            overflow-y: auto;
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
         }
+        
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .animate-in {
+            animation: fadeInUp 0.5s ease-out forwards;
+        }
+        
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
     </style>
 </head>
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid px-4">
-            <a class="navbar-brand" href="/">🛡️ SIEM AFRICA</a>
-            <div class="ms-auto">
-                <a href="/" class="btn btn-outline-light btn-sm">← Retour au Tableau de Bord</a>
+            <a class="navbar-brand" href="/">
+                <span class="logo">🛡️</span>
+                SIEM AFRICA
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">📊 Tableau de Bord</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/alertes">📋 Toutes les Alertes</a>
+                    </li>
+                </ul>
+                
+                <div class="d-flex align-items-center gap-3">
+                    <span class="user-badge">
+                        👤 {{ username }}
+                    </span>
+                    <a href="/change-password" class="btn btn-sm btn-outline-light">🔑 Mot de passe</a>
+                    <button class="btn-refresh" onclick="location.reload()">
+                        🔄 Actualiser
+                    </button>
+                    <a href="/logout" class="btn btn-sm btn-outline-light">🚪 Déconnexion</a>
+                </div>
             </div>
         </div>
     </nav>
     
+    <!-- Password Warning -->
+    {% if password_warning %}
+    <div class="alert alert-{{ password_warning.level }} password-warning mb-0">
+        <div class="container-fluid">
+            <div class="d-flex align-items-center justify-content-between">
+                <span>{{ password_warning.message }}</span>
+                <a href="{{ url_for('change_password') }}" class="btn btn-sm btn-{{ password_warning.level }}">
+                    Changer maintenant
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- Main Content -->
     <div class="main-content">
         <div class="container-fluid">
-            {% set ginfo = get_gravite_info(alerte.gravite) %}
-            
-            <!-- Alert Header -->
-            <div class="alert-header {{ alerte.gravite }}">
-                <div class="row align-items-center">
-                    <div class="col-lg-8">
-                        <div class="alert-title">
-                            {{ ginfo.icon }} {{ alerte.nom_alerte }}
+            <!-- Row 1: Security Score + Stats -->
+            <div class="row g-4 mb-4">
+                <!-- Security Score -->
+                <div class="col-lg-3 col-md-6 animate-in">
+                    <div class="dashboard-card security-score-card">
+                        <div class="score-circle">
+                            <span class="score-value">{{ security_score }}</span>
                         </div>
-                        <div class="alert-meta">
-                            <span>📅 {{ format_timestamp(alerte.timestamp) }}</span>
-                            <span>🏷️ {{ alerte.categorie }}</span>
-                            <span>📊 Rule ID: {{ alerte.wazuh_rule_id }}</span>
+                        <div class="score-label">Score de Sécurité</div>
+                        <div class="score-status">
+                            {% if security_score >= 80 %}
+                                ✅ Bon état
+                            {% elif security_score >= 50 %}
+                                ⚠️ Attention requise
+                            {% else %}
+                                🚨 État critique
+                            {% endif %}
                         </div>
                     </div>
-                    <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
-                        <span class="severity-badge">
-                            {{ ginfo.label|upper }}
-                        </span>
+                </div>
+                
+                <!-- Today Stats -->
+                <div class="col-lg-3 col-md-6 animate-in delay-1">
+                    <div class="dashboard-card today-stats">
+                        <div class="today-number">{{ alertes_today }}</div>
+                        <div class="today-label">Alertes Aujourd'hui</div>
+                        <hr style="opacity: 0.3; margin: 20px 0;">
+                        <div class="today-number" style="font-size: 32px;">{{ total_alertes }}</div>
+                        <div class="today-label">Total Non Traitées</div>
+                    </div>
+                </div>
+                
+                <!-- Gravity Stats -->
+                <div class="col-lg-6 animate-in delay-2">
+                    <div class="row g-3 h-100">
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card critique">
+                                <div class="stat-number">{{ stats_gravite.get('critique', 0) }}</div>
+                                <div class="stat-label">🔴 Critique</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card haute">
+                                <div class="stat-number">{{ stats_gravite.get('haute', 0) }}</div>
+                                <div class="stat-label">🟠 Haute</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card moyenne">
+                                <div class="stat-number">{{ stats_gravite.get('moyenne', 0) }}</div>
+                                <div class="stat-label">🟡 Moyenne</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card faible">
+                                <div class="stat-number">{{ stats_gravite.get('faible', 0) + stats_gravite.get('info', 0) }}</div>
+                                <div class="stat-label">🟢 Faible</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <div class="row">
-                <!-- Main Column -->
-                <div class="col-lg-8">
-                    <!-- Description -->
-                    <div class="info-card">
-                        <div class="card-header">📝 Description</div>
-                        <div class="card-body">
-                            <p class="mb-0">{{ alerte.description_fr }}</p>
+            <!-- Row 2: Chart + Top Lists -->
+            <div class="row g-4 mb-4">
+                <!-- Chart -->
+                <div class="col-lg-6 animate-in delay-3">
+                    <div class="dashboard-card">
+                        <div class="card-header-custom">
+                            📈 Alertes des dernières 24 heures
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="alertsChart"></canvas>
                         </div>
                     </div>
-                    
-                    <!-- Impact & Cause -->
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="info-card">
-                                <div class="card-header">⚠️ Impact Potentiel</div>
-                                <div class="card-body">
-                                    <p class="mb-0">{{ alerte.impact or 'Non spécifié' }}</p>
-                                </div>
-                            </div>
+                </div>
+                
+                <!-- Top IPs -->
+                <div class="col-lg-3 col-md-6 animate-in delay-3">
+                    <div class="dashboard-card">
+                        <div class="card-header-custom">
+                            🔥 Top IP Attaquantes
                         </div>
-                        <div class="col-md-6">
-                            <div class="info-card">
-                                <div class="card-header">🔍 Cause Probable</div>
-                                <div class="card-body">
-                                    <p class="mb-0">{{ alerte.cause_probable or 'Non spécifiée' }}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Recommendations -->
-                    <div class="info-card">
-                        <div class="card-header">🔧 Recommandations</div>
-                        <div class="card-body">
-                            {% for rec in recommandations %}
-                            <div class="recommendation-item {{ rec.niveau }}">
-                                <div class="recommendation-title">
-                                    <span>{{ loop.index }}. {{ rec.action }}</span>
-                                    <span class="badge badge-niveau 
-                                        {% if rec.niveau == 'debutant' %}bg-success
-                                        {% elif rec.niveau == 'intermediaire' %}bg-warning text-dark
-                                        {% else %}bg-danger{% endif %}">
-                                        {{ rec.niveau|capitalize }}
-                                    </span>
-                                </div>
-                                {% if rec.commande %}
-                                <div class="command-box">
-                                    <code>{{ rec.commande }}</code>
-                                    <button class="copy-btn" onclick="copyCommand(this)" title="Copier">📋 Copier</button>
-                                </div>
-                                {% endif %}
-                            </div>
+                        <ul class="top-list">
+                            {% if top_ips %}
+                                {% for ip in top_ips %}
+                                <li>
+                                    <div class="d-flex align-items-center">
+                                        <span class="top-rank {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">
+                                            {{ loop.index }}
+                                        </span>
+                                        <span class="top-value">{{ ip.source_ip or 'N/A' }}</span>
+                                    </div>
+                                    <span class="top-count">{{ ip.total }}</span>
+                                </li>
+                                {% endfor %}
                             {% else %}
-                            <p class="text-muted mb-0">Aucune recommandation spécifique disponible.</p>
-                            {% endfor %}
+                                <li class="empty-state">
+                                    <div class="icon">🎉</div>
+                                    <div>Aucune IP détectée</div>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Top Rules -->
+                <div class="col-lg-3 col-md-6 animate-in delay-4">
+                    <div class="dashboard-card">
+                        <div class="card-header-custom">
+                            📋 Top Alertes
+                        </div>
+                        <ul class="top-list">
+                            {% if top_rules %}
+                                {% for rule in top_rules %}
+                                <li>
+                                    <div class="d-flex align-items-center" style="flex: 1; min-width: 0;">
+                                        <span class="top-rank {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">
+                                            {{ loop.index }}
+                                        </span>
+                                        <span class="text-truncate" style="font-size: 13px;">{{ rule.nom[:25] }}{% if rule.nom|length > 25 %}...{% endif %}</span>
+                                    </div>
+                                    <span class="top-count">{{ rule.total }}</span>
+                                </li>
+                                {% endfor %}
+                            {% else %}
+                                <li class="empty-state">
+                                    <div class="icon">✅</div>
+                                    <div>Aucune alerte</div>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Row 3: Alerts Table + Sidebar -->
+            <div class="row g-4">
+                <!-- Alerts Table -->
+                <div class="col-lg-8 animate-in">
+                    <div class="dashboard-card">
+                        <div class="card-header-custom">
+                            <span>🚨 Dernières Alertes</span>
+                            <a href="/alertes" class="btn btn-sm btn-outline-success ms-auto">Voir tout →</a>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table alert-table">
+                                <thead>
+                                    <tr>
+                                        <th>Gravité</th>
+                                        <th>Heure</th>
+                                        <th>Alerte</th>
+                                        <th>Source</th>
+                                        <th>Statut</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if alertes %}
+                                        {% for item in alertes %}
+                                        <tr onclick="window.location='/alerte/{{ item.id }}'">
+                                            <td>
+                                                {% if item.gravite == 'critique' %}
+                                                    <span class="badge-gravite badge-critique">🔴 Critique</span>
+                                                {% elif item.gravite == 'haute' %}
+                                                    <span class="badge-gravite badge-haute">🟠 Haute</span>
+                                                {% elif item.gravite == 'moyenne' %}
+                                                    <span class="badge-gravite badge-moyenne">🟡 Moyenne</span>
+                                                {% elif item.gravite == 'faible' %}
+                                                    <span class="badge-gravite badge-faible">🟢 Faible</span>
+                                                {% else %}
+                                                    <span class="badge-gravite badge-info">ℹ️ Info</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">{{ item.timestamp|timeago }}</small>
+                                            </td>
+                                            <td>
+                                                <span style="margin-right: 5px;">{{ item.icone }}</span>
+                                                {{ item.nom_alerte[:35] }}{% if item.nom_alerte|length > 35 %}...{% endif %}
+                                            </td>
+                                            <td>
+                                                <code style="background: #f0f0f0; padding: 3px 8px; border-radius: 4px;">
+                                                    {{ item.source_ip or 'N/A' }}
+                                                </code>
+                                            </td>
+                                            <td>
+                                                <span class="status-badge status-{{ item.statut }}">
+                                                    {{ item.statut|capitalize }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <a href="/alerte/{{ item.id }}" class="btn btn-sm btn-outline-secondary">
+                                                    Voir
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="6">
+                                                <div class="empty-state">
+                                                    <div class="icon">✅</div>
+                                                    <div>Aucune alerte active</div>
+                                                    <small class="text-muted">Système sécurisé</small>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Sidebar -->
                 <div class="col-lg-4">
-                    <!-- Technical Details -->
-                    <div class="info-card">
-                        <div class="card-header">🖥️ Détails Techniques</div>
-                        <div class="card-body">
-                            <div class="detail-item">
-                                <span class="detail-label">Adresse IP Source</span>
-                                <span class="detail-value"><code>{{ alerte.source_ip or 'N/A' }}</code></span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Port Source</span>
-                                <span class="detail-value">{{ alerte.source_port or 'N/A' }}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Adresse IP Destination</span>
-                                <span class="detail-value"><code>{{ alerte.dest_ip or 'N/A' }}</code></span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Port Destination</span>
-                                <span class="detail-value">{{ alerte.dest_port or 'N/A' }}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Agent</span>
-                                <span class="detail-value">{{ alerte.agent_name or 'N/A' }}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Utilisateur</span>
-                                <span class="detail-value">{{ alerte.utilisateur or 'N/A' }}</span>
-                            </div>
-                            {% if alerte.mitre_id %}
-                            <div class="detail-item">
-                                <span class="detail-label">MITRE ATT&CK</span>
-                                <span class="detail-value">
-                                    <a href="https://attack.mitre.org/techniques/{{ alerte.mitre_id }}/" 
-                                       target="_blank" class="mitre-link">
-                                        {{ alerte.mitre_id }} ↗
-                                    </a>
-                                </span>
-                            </div>
+                    <!-- Categories -->
+                    <div class="dashboard-card mb-4 animate-in delay-2">
+                        <div class="card-header-custom">
+                            📊 Par Catégorie
+                        </div>
+                        <div>
+                            {% if stats_categories %}
+                                {% for cat in stats_categories %}
+                                <div class="category-item">
+                                    <span class="category-icon">{{ cat.icone }}</span>
+                                    <span class="category-name">{{ cat.categorie }}</span>
+                                    <span class="category-count">{{ cat.total }}</span>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="empty-state">
+                                    <div class="icon">📭</div>
+                                    <div>Aucune donnée</div>
+                                </div>
                             {% endif %}
                         </div>
                     </div>
                     
-                    <!-- Actions -->
-                    <div class="action-card">
-                        <div class="card-header">⚡ Actions</div>
-                        <div class="card-body">
-                            <div class="status-current">
-                                <span>Statut actuel:</span>
-                                <span class="status-badge status-{{ alerte.statut }}">
-                                    {{ alerte.statut|capitalize }}
-                                </span>
-                            </div>
-                            
-                            <form action="/alerte/{{ alerte.id }}/action" method="POST">
-                                <div class="mb-3">
-                                    <textarea class="form-control" name="note" rows="2" 
-                                        placeholder="Ajouter une note (optionnel)"
-                                        style="border-radius: 10px;"></textarea>
-                                </div>
-                                <div class="action-buttons">
-                                    <button type="submit" name="action" value="traite" class="btn btn-success">
-                                        ✅ Traité
-                                    </button>
-                                    <button type="submit" name="action" value="en_cours" class="btn btn-info">
-                                        🔄 En Cours
-                                    </button>
-                                    <button type="submit" name="action" value="ignore" class="btn btn-secondary">
-                                        🚫 Ignorer
-                                    </button>
-                                    <button type="submit" name="action" value="faux_positif" class="btn btn-outline-secondary">
-                                        ❌ Faux Positif
-                                    </button>
-                                </div>
-                            </form>
+                    <!-- System Status -->
+                    <div class="dashboard-card animate-in delay-3">
+                        <div class="card-header-custom">
+                            ⚙️ État du Système
                         </div>
-                    </div>
-                    
-                    <!-- Raw Log -->
-                    <div class="info-card mt-4">
-                        <div class="card-header">📄 Log Original Wazuh</div>
-                        <div class="card-body">
-                            <div class="raw-log">
-                                {{ alerte.description_wazuh or 'Non disponible' }}
+                        <div class="system-status">
+                            <div class="status-item">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-dot active"></span>
+                                    <span>Agent SIEM Africa</span>
+                                </div>
+                                <span class="badge bg-success">Actif</span>
+                            </div>
+                            <div class="status-item">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-dot active"></span>
+                                    <span>Wazuh Manager</span>
+                                </div>
+                                <span class="badge bg-success">Connecté</span>
+                            </div>
+                            <div class="status-item">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-dot active"></span>
+                                    <span>Base de données</span>
+                                </div>
+                                <span class="badge bg-success">OK</span>
+                            </div>
+                            <div class="status-item">
+                                <div class="d-flex align-items-center">
+                                    <span>🕐 Dernière MAJ</span>
+                                </div>
+                                <span class="text-muted">Maintenant</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <!-- Back Button -->
-            <div class="text-center mt-4">
-                <a href="/" class="btn-back">
-                    ← Retour au Tableau de Bord
-                </a>
-            </div>
         </div>
     </div>
     
+    <!-- Footer -->
+    <footer class="dashboard-footer">
+        <p>🛡️ <strong>SIEM AFRICA</strong> - Solution de Cybersécurité pour l'Afrique</p>
+        <p><small>IUT de Douala © 2026</small></p>
+    </footer>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        function copyCommand(btn) {
-            const command = btn.parentElement.querySelector('code').textContent;
-            navigator.clipboard.writeText(command).then(() => {
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '✅ Copié!';
-                setTimeout(() => btn.innerHTML = originalText, 2000);
-            });
-        }
+        // Chart.js - Alertes par heure
+        const ctx = document.getElementById('alertsChart').getContext('2d');
+        const alertsData = {{ alertes_par_heure | tojson }};
+        
+        const labels = Object.keys(alertsData).sort();
+        const data = labels.map(h => alertsData[h]);
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels.map(h => h + 'h'),
+                datasets: [{
+                    label: 'Alertes',
+                    data: data,
+                    backgroundColor: 'rgba(45, 138, 62, 0.7)',
+                    borderColor: 'rgba(26, 95, 42, 1)',
+                    borderWidth: 1,
+                    borderRadius: 5,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Auto-refresh every 60 seconds
+        setTimeout(function() {
+            location.reload();
+        }, 60000);
     </script>
 </body>
 </html>
