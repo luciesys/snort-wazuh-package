@@ -1,9 +1,13 @@
 #!/bin/bash
+
 # =============================================================================
-# SIEM AFRICA - Script d'Installation du Dashboard
+# SIEM AFRICA - Installation Dashboard v2.0
 # =============================================================================
-# Ce script installe le dashboard web et l'agent d'interprétation
-# Prérequis: Snort + Wazuh déjà installés (via install_siem_v3.sh)
+# Installation intelligente avec:
+# - Détection des composants existants
+# - HTTPS avec certificat auto-signé
+# - Authentification obligatoire
+# - Mise à jour automatique
 # =============================================================================
 
 set -e
@@ -13,201 +17,312 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 # Configuration
 INSTALL_DIR="/opt/siem-africa"
-GITHUB_RAW="https://raw.githubusercontent.com/luciesys/snort-wazuh-package/main"
-LOG_FILE="/var/log/siem-africa-install.log"
+DB_DIR="$INSTALL_DIR/database"
+DASHBOARD_DIR="$INSTALL_DIR/dashboard"
+TEMPLATES_DIR="$DASHBOARD_DIR/templates"
+SSL_DIR="$INSTALL_DIR/ssl"
+LOG_DIR="/var/log/siem-africa"
+VENV_DIR="$INSTALL_DIR/venv"
+GITHUB_BASE="https://raw.githubusercontent.com/luciesys/snort-wazuh-package/main"
+CRIDS_FILE="/root/SIEM_AFRICA_CRIDS.txt"
+
+# Mot de passe par défaut
+DEFAULT_PASSWORD="SiemAfrica2026!"
 
 # =============================================================================
-# FONCTIONS
+# FONCTIONS UTILITAIRES
 # =============================================================================
 
-log() {
+print_banner() {
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                                                              ║${NC}"
+    echo -e "${GREEN}║     🛡️  SIEM AFRICA - Dashboard Installation v2.0           ║${NC}"
+    echo -e "${GREEN}║         Solution de Cybersécurité pour l'Afrique            ║${NC}"
+    echo -e "${GREEN}║                                                              ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
     echo -e "${GREEN}[✓]${NC} $1"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[!]${NC} $1"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: $1" >> "$LOG_FILE"
+    echo -e "${YELLOW}[⚠]${NC} $1"
 }
 
 log_error() {
     echo -e "${RED}[✗]${NC} $1"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$LOG_FILE"
 }
-
-log_step() {
-    echo ""
-    echo -e "${BLUE}[ÉTAPE]${NC} $1"
-    echo "=============================================" >> "$LOG_FILE"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ÉTAPE: $1" >> "$LOG_FILE"
-}
-
-abort() {
-    echo ""
-    echo -e "${RED}╔══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║     ✗ INSTALLATION ARRÊTÉE                                      ║${NC}"
-    echo -e "${RED}╚══════════════════════════════════════════════════════════════════╝${NC}"
-    echo -e "  Raison: $1"
-    echo -e "  Log: $LOG_FILE"
-    exit 1
-}
-
-# =============================================================================
-# VÉRIFICATIONS
-# =============================================================================
 
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        abort "Ce script doit être exécuté en tant que root (sudo)"
+        log_error "Ce script doit être exécuté en tant que root (sudo)"
+        exit 1
     fi
-    log "Exécution en tant que root"
 }
 
 check_wazuh() {
     if ! systemctl is-active --quiet wazuh-manager; then
-        abort "Wazuh Manager n'est pas actif. Installez d'abord Snort+Wazuh avec install_siem_v3.sh"
+        log_warning "Wazuh Manager n'est pas actif"
+        log_info "Tentative de démarrage..."
+        systemctl start wazuh-manager || true
+        sleep 3
+        
+        if ! systemctl is-active --quiet wazuh-manager; then
+            log_error "Impossible de démarrer Wazuh Manager"
+            log_info "Installez d'abord Wazuh avec install_siem_v3.sh"
+            exit 1
+        fi
     fi
-    log "Wazuh Manager détecté et actif"
+    log_success "Wazuh Manager est actif"
 }
 
 # =============================================================================
-# INSTALLATION
+# INSTALLATION DES DÉPENDANCES
 # =============================================================================
-
-show_banner() {
-    clear
-    echo -e "${GREEN}"
-    echo "╔══════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                  ║"
-    echo "║   🛡️  SIEM AFRICA - Installation du Dashboard                    ║"
-    echo "║                                                                  ║"
-    echo "║   Dashboard Web + Agent d'Interprétation                        ║"
-    echo "║                                                                  ║"
-    echo "╚══════════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-    echo ""
-}
 
 install_dependencies() {
-    log_step "Installation des dépendances Python"
+    log_info "Installation des dépendances système..."
     
     apt-get update -qq
-    apt-get install -y python3 python3-pip python3-venv sqlite3 >> "$LOG_FILE" 2>&1
+    apt-get install -y -qq python3 python3-pip python3-venv sqlite3 curl openssl > /dev/null 2>&1
     
-    log "Python3 et SQLite3 installés"
+    log_success "Dépendances système installées"
 }
+
+# =============================================================================
+# CRÉATION DES RÉPERTOIRES
+# =============================================================================
 
 create_directories() {
-    log_step "Création des répertoires"
+    log_info "Création des répertoires..."
     
-    mkdir -p "$INSTALL_DIR"/{dashboard,database,logs}
-    mkdir -p "$INSTALL_DIR/dashboard/templates"
-    mkdir -p "$INSTALL_DIR/dashboard/static"
-    mkdir -p /var/log/siem-africa
+    mkdir -p "$INSTALL_DIR"
+    mkdir -p "$DB_DIR"
+    mkdir -p "$DASHBOARD_DIR"
+    mkdir -p "$TEMPLATES_DIR"
+    mkdir -p "$SSL_DIR"
+    mkdir -p "$LOG_DIR"
     
-    log "Répertoires créés dans $INSTALL_DIR"
+    log_success "Répertoires créés"
 }
+
+# =============================================================================
+# GÉNÉRATION CERTIFICAT SSL
+# =============================================================================
+
+generate_ssl_certificate() {
+    if [ -f "$SSL_DIR/cert.pem" ] && [ -f "$SSL_DIR/key.pem" ]; then
+        log_warning "Certificat SSL existant détecté"
+        return
+    fi
+    
+    log_info "Génération du certificat SSL auto-signé..."
+    
+    openssl req -x509 -newkey rsa:4096 -keyout "$SSL_DIR/key.pem" -out "$SSL_DIR/cert.pem" \
+        -days 365 -nodes -subj "/C=CM/ST=Littoral/L=Douala/O=SIEM Africa/OU=Security/CN=siem-africa.local" \
+        > /dev/null 2>&1
+    
+    chmod 600 "$SSL_DIR/key.pem"
+    chmod 644 "$SSL_DIR/cert.pem"
+    
+    log_success "Certificat SSL généré (valide 1 an)"
+}
+
+# =============================================================================
+# TÉLÉCHARGEMENT DES FICHIERS
+# =============================================================================
 
 download_files() {
-    log_step "Téléchargement des fichiers"
+    log_info "Téléchargement des fichiers depuis GitHub..."
     
     # Base de données SQL
-    curl -sL "$GITHUB_RAW/database/siem_africa_db.sql" -o "$INSTALL_DIR/database/siem_africa_db.sql"
-    log "Base de données SQL téléchargée"
-    
-    # Agent
-    curl -sL "$GITHUB_RAW/dashboard/agent.py" -o "$INSTALL_DIR/dashboard/agent.py"
-    log "Agent téléchargé"
+    log_info "  → Base de données..."
+    curl -sL "$GITHUB_BASE/database/siem_africa_db.sql" -o "$DB_DIR/siem_africa_db.sql"
     
     # Application Flask
-    curl -sL "$GITHUB_RAW/dashboard/app.py" -o "$INSTALL_DIR/dashboard/app.py"
-    log "Application Flask téléchargée"
+    log_info "  → Application Flask..."
+    curl -sL "$GITHUB_BASE/dashboard/app.py" -o "$DASHBOARD_DIR/app.py"
+    
+    # Agent
+    log_info "  → Agent d'interprétation..."
+    curl -sL "$GITHUB_BASE/dashboard/agent.py" -o "$DASHBOARD_DIR/agent.py"
     
     # Templates
-    curl -sL "$GITHUB_RAW/dashboard/templates/index.html" -o "$INSTALL_DIR/dashboard/templates/index.html"
-    curl -sL "$GITHUB_RAW/dashboard/templates/detail.html" -o "$INSTALL_DIR/dashboard/templates/detail.html"
-    curl -sL "$GITHUB_RAW/dashboard/templates/alertes.html" -o "$INSTALL_DIR/dashboard/templates/alertes.html"
-    log "Templates HTML téléchargés"
+    log_info "  → Templates HTML..."
+    curl -sL "$GITHUB_BASE/dashboard/templates/login.html" -o "$TEMPLATES_DIR/login.html"
+    curl -sL "$GITHUB_BASE/dashboard/templates/change_password.html" -o "$TEMPLATES_DIR/change_password.html"
+    curl -sL "$GITHUB_BASE/dashboard/templates/index.html" -o "$TEMPLATES_DIR/index.html"
+    curl -sL "$GITHUB_BASE/dashboard/templates/detail.html" -o "$TEMPLATES_DIR/detail.html"
+    curl -sL "$GITHUB_BASE/dashboard/templates/alertes.html" -o "$TEMPLATES_DIR/alertes.html"
+    
+    log_success "Fichiers téléchargés"
 }
+
+# =============================================================================
+# CRÉATION DE LA BASE DE DONNÉES
+# =============================================================================
 
 setup_database() {
-    log_step "Configuration de la base de données"
+    if [ -f "$DB_DIR/siem_africa.db" ]; then
+        log_warning "Base de données existante détectée"
+        log_info "Mise à jour de la structure..."
+        
+        # Ajouter les nouvelles tables si elles n'existent pas
+        sqlite3 "$DB_DIR/siem_africa.db" <<EOF
+-- Table utilisateurs (si n'existe pas)
+CREATE TABLE IF NOT EXISTS utilisateurs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    must_change_password INTEGER DEFAULT 1,
+    password_created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    password_expires_at DATETIME,
+    last_login DATETIME,
+    failed_attempts INTEGER DEFAULT 0,
+    locked_until DATETIME,
+    password_history TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table sessions
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    session_token TEXT UNIQUE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    FOREIGN KEY (user_id) REFERENCES utilisateurs(id)
+);
+
+-- Table audit_log
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    username TEXT,
+    action TEXT,
+    ip_address TEXT,
+    details TEXT,
+    success INTEGER
+);
+
+-- Index
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
+CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
+EOF
+        log_success "Structure de la base mise à jour"
+    else
+        log_info "Création de la base de données..."
+        sqlite3 "$DB_DIR/siem_africa.db" < "$DB_DIR/siem_africa_db.sql"
+        log_success "Base de données créée (207 règles)"
+    fi
     
-    # Créer la base de données SQLite
-    sqlite3 "$INSTALL_DIR/database/siem_africa.db" < "$INSTALL_DIR/database/siem_africa_db.sql"
+    # Créer l'utilisateur admin par défaut si n'existe pas
+    log_info "Vérification de l'utilisateur admin..."
     
-    # Permissions
-    chmod 644 "$INSTALL_DIR/database/siem_africa.db"
+    # Hash du mot de passe par défaut (SHA256 avec sel)
+    PASS_HASH=$(echo -n "${DEFAULT_PASSWORD}siem_africa_2026" | sha256sum | cut -d' ' -f1)
     
-    # Compter les règles
-    RULES_COUNT=$(sqlite3 "$INSTALL_DIR/database/siem_africa.db" "SELECT COUNT(*) FROM regles;")
-    log "Base de données créée avec $RULES_COUNT règles"
+    sqlite3 "$DB_DIR/siem_africa.db" <<EOF
+INSERT OR IGNORE INTO utilisateurs (
+    username, 
+    password_hash, 
+    must_change_password, 
+    password_expires_at
+) VALUES (
+    'admin',
+    '$PASS_HASH',
+    1,
+    datetime('now', '+90 days')
+);
+EOF
+    
+    log_success "Utilisateur admin configuré"
 }
+
+# =============================================================================
+# ENVIRONNEMENT VIRTUEL PYTHON
+# =============================================================================
 
 setup_python_env() {
-    log_step "Configuration de l'environnement Python"
-    
-    # Créer un environnement virtuel
-    python3 -m venv "$INSTALL_DIR/venv"
-    
-    # Installer les dépendances
-    "$INSTALL_DIR/venv/bin/pip" install --upgrade pip >> "$LOG_FILE" 2>&1
-    "$INSTALL_DIR/venv/bin/pip" install flask requests >> "$LOG_FILE" 2>&1
-    
-    log "Environnement Python configuré"
-}
-
-get_wazuh_password() {
-    log_step "Récupération du mot de passe Wazuh API"
-    
-    # Essayer de lire depuis le fichier credentials
-    if [ -f "/root/siem_credentials.txt" ]; then
-        WAZUH_PASS=$(grep -i "wazuh.*api\|admin" /root/siem_credentials.txt | grep -oP ':\s*\K.*' | head -1)
-    fi
-    
-    # Si pas trouvé, essayer wazuh-passwords
-    if [ -z "$WAZUH_PASS" ] && [ -f "/root/wazuh-install-files/wazuh-passwords.txt" ]; then
-        WAZUH_PASS=$(grep "api" /root/wazuh-install-files/wazuh-passwords.txt | grep -oP ':\s*\K.*' | head -1)
-    fi
-    
-    # Valeur par défaut
-    if [ -z "$WAZUH_PASS" ]; then
-        WAZUH_PASS="wazuh"
-        log_warning "Mot de passe Wazuh API non trouvé, utilisation de 'wazuh'"
+    if [ -d "$VENV_DIR" ]; then
+        log_warning "Environnement Python existant détecté"
     else
-        log "Mot de passe Wazuh API récupéré"
+        log_info "Création de l'environnement virtuel Python..."
+        python3 -m venv "$VENV_DIR"
     fi
+    
+    log_info "Installation des packages Python..."
+    "$VENV_DIR/bin/pip" install --upgrade pip -q
+    "$VENV_DIR/bin/pip" install flask requests urllib3 -q
+    
+    log_success "Environnement Python configuré"
 }
 
-create_config() {
-    log_step "Création du fichier de configuration"
+# =============================================================================
+# CONFIGURATION WAZUH
+# =============================================================================
+
+get_wazuh_credentials() {
+    log_info "Récupération des identifiants Wazuh API..."
     
-    cat > "$INSTALL_DIR/config.json" << EOF
+    WAZUH_USER="wazuh"
+    WAZUH_PASS=""
+    
+    # Chercher le mot de passe dans différents emplacements
+    if [ -f "/root/siem_credentials.txt" ]; then
+        WAZUH_PASS=$(grep "API Password" /root/siem_credentials.txt 2>/dev/null | cut -d':' -f2 | tr -d ' ' || true)
+    fi
+    
+    if [ -z "$WAZUH_PASS" ] && [ -f "/root/wazuh-install-files/wazuh-passwords.txt" ]; then
+        WAZUH_PASS=$(grep "wazuh " /root/wazuh-install-files/wazuh-passwords.txt 2>/dev/null | awk '{print $NF}' || true)
+    fi
+    
+    if [ -z "$WAZUH_PASS" ]; then
+        log_warning "Mot de passe Wazuh API non trouvé automatiquement"
+        echo -n "Entrez le mot de passe de l'API Wazuh: "
+        read -s WAZUH_PASS
+        echo ""
+    fi
+    
+    # Créer le fichier de configuration
+    cat > "$INSTALL_DIR/config.json" <<EOF
 {
-    "wazuh_host": "localhost",
+    "wazuh_host": "127.0.0.1",
     "wazuh_port": 55000,
-    "wazuh_user": "wazuh",
+    "wazuh_user": "$WAZUH_USER",
     "wazuh_password": "$WAZUH_PASS",
-    "db_path": "$INSTALL_DIR/database/siem_africa.db",
-    "log_path": "/var/log/siem-africa/agent.log",
-    "check_interval": 30,
-    "alerts_limit": 100
+    "db_path": "$DB_DIR/siem_africa.db",
+    "check_interval": 30
 }
 EOF
     
     chmod 600 "$INSTALL_DIR/config.json"
-    log "Configuration créée"
+    log_success "Configuration Wazuh enregistrée"
 }
 
-create_systemd_services() {
-    log_step "Création des services systemd"
+# =============================================================================
+# SERVICES SYSTEMD
+# =============================================================================
+
+create_services() {
+    log_info "Création des services systemd..."
     
     # Service Agent
-    cat > /etc/systemd/system/siem-africa-agent.service << EOF
+    cat > /etc/systemd/system/siem-africa-agent.service <<EOF
 [Unit]
 Description=SIEM Africa - Agent d'Interprétation
 After=network.target wazuh-manager.service
@@ -216,9 +331,10 @@ Wants=wazuh-manager.service
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$INSTALL_DIR/dashboard
-Environment="SIEM_DB_PATH=$INSTALL_DIR/database/siem_africa.db"
-ExecStart=$INSTALL_DIR/venv/bin/python3 $INSTALL_DIR/dashboard/agent.py
+WorkingDirectory=$DASHBOARD_DIR
+Environment="SIEM_CONFIG_PATH=$INSTALL_DIR/config.json"
+Environment="SIEM_DB_PATH=$DB_DIR/siem_africa.db"
+ExecStart=$VENV_DIR/bin/python3 $DASHBOARD_DIR/agent.py
 Restart=always
 RestartSec=10
 
@@ -227,17 +343,18 @@ WantedBy=multi-user.target
 EOF
     
     # Service Dashboard
-    cat > /etc/systemd/system/siem-africa-dashboard.service << EOF
+    cat > /etc/systemd/system/siem-africa-dashboard.service <<EOF
 [Unit]
-Description=SIEM Africa - Dashboard Web
+Description=SIEM Africa - Dashboard Web Sécurisé
 After=network.target siem-africa-agent.service
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$INSTALL_DIR/dashboard
-Environment="SIEM_DB_PATH=$INSTALL_DIR/database/siem_africa.db"
-ExecStart=$INSTALL_DIR/venv/bin/python3 $INSTALL_DIR/dashboard/app.py
+WorkingDirectory=$DASHBOARD_DIR
+Environment="SIEM_DB_PATH=$DB_DIR/siem_africa.db"
+Environment="SECRET_KEY=$(openssl rand -hex 32)"
+ExecStart=$VENV_DIR/bin/python3 $DASHBOARD_DIR/app.py
 Restart=always
 RestartSec=10
 
@@ -245,94 +362,310 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
     
-    # Recharger systemd
+    # Recharger et activer
     systemctl daemon-reload
+    systemctl enable siem-africa-agent.service > /dev/null 2>&1
+    systemctl enable siem-africa-dashboard.service > /dev/null 2>&1
     
-    log "Services systemd créés"
+    log_success "Services systemd créés et activés"
 }
+
+# =============================================================================
+# DÉMARRAGE DES SERVICES
+# =============================================================================
 
 start_services() {
-    log_step "Démarrage des services"
+    log_info "Démarrage des services..."
     
-    # Activer et démarrer l'agent
-    systemctl enable siem-africa-agent >> "$LOG_FILE" 2>&1
-    systemctl start siem-africa-agent
+    # Arrêter si déjà en cours
+    systemctl stop siem-africa-dashboard.service > /dev/null 2>&1 || true
+    systemctl stop siem-africa-agent.service > /dev/null 2>&1 || true
+    
     sleep 2
     
-    if systemctl is-active --quiet siem-africa-agent; then
-        log "Agent SIEM Africa démarré"
+    # Démarrer
+    systemctl start siem-africa-agent.service
+    sleep 3
+    systemctl start siem-africa-dashboard.service
+    
+    # Vérifier
+    if systemctl is-active --quiet siem-africa-agent.service; then
+        log_success "Agent SIEM Africa démarré"
     else
-        log_warning "L'agent n'a pas démarré correctement"
+        log_error "Échec du démarrage de l'agent"
     fi
     
-    # Activer et démarrer le dashboard
-    systemctl enable siem-africa-dashboard >> "$LOG_FILE" 2>&1
-    systemctl start siem-africa-dashboard
-    sleep 2
-    
-    if systemctl is-active --quiet siem-africa-dashboard; then
-        log "Dashboard SIEM Africa démarré"
+    if systemctl is-active --quiet siem-africa-dashboard.service; then
+        log_success "Dashboard SIEM Africa démarré"
     else
-        log_warning "Le dashboard n'a pas démarré correctement"
+        log_error "Échec du démarrage du dashboard"
     fi
 }
 
-show_summary() {
-    # Récupérer l'IP
-    IP=$(hostname -I | awk '{print $1}')
+# =============================================================================
+# CONFIGURATION PARE-FEU
+# =============================================================================
+
+configure_firewall() {
+    log_info "Configuration du pare-feu..."
+    
+    if command -v ufw > /dev/null 2>&1; then
+        ufw allow 5000/tcp > /dev/null 2>&1 || true
+        log_success "Port 5000 ouvert (UFW)"
+    elif command -v firewall-cmd > /dev/null 2>&1; then
+        firewall-cmd --permanent --add-port=5000/tcp > /dev/null 2>&1 || true
+        firewall-cmd --reload > /dev/null 2>&1 || true
+        log_success "Port 5000 ouvert (firewalld)"
+    else
+        log_warning "Aucun pare-feu détecté - assurez-vous que le port 5000 est accessible"
+    fi
+}
+
+# =============================================================================
+# CRÉATION DU FICHIER CRIDS
+# =============================================================================
+
+create_crids_file() {
+    log_info "Création du fichier CRIDS..."
+    
+    # Obtenir l'IP
+    IP_ADDR=$(hostname -I | awk '{print $1}')
+    DATE_INSTALL=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    cat > "$CRIDS_FILE" <<EOF
+================================================================================
+                    🛡️  SIEM AFRICA - FICHIER CRIDS
+              (Credentials, Ressources, Informations, Diagnostics, Services)
+================================================================================
+                    Date d'installation: $DATE_INSTALL
+================================================================================
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         INFORMATIONS DE CONNEXION                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  🌐 URL Dashboard:        https://$IP_ADDR:5000
+  
+  👤 Utilisateur:          admin
+  🔒 Mot de passe:         $DEFAULT_PASSWORD
+  
+  ⚠️  IMPORTANT: Vous devez changer le mot de passe à la première connexion !
+  
+  📅 Validité mot de passe: 90 jours
+  🔐 Verrouillage compte:   Après 5 tentatives échouées (15 min)
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         COMMANDES DE VÉRIFICATION                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  # -------- VÉRIFIER LE STATUT DES SERVICES --------
+  systemctl status siem-africa-agent
+  systemctl status siem-africa-dashboard
+  systemctl status wazuh-manager
+
+  # -------- VOIR LES LOGS EN TEMPS RÉEL --------
+  tail -f /var/log/siem-africa/agent.log
+  journalctl -u siem-africa-dashboard -f
+  journalctl -u siem-africa-agent -f
+
+  # -------- VÉRIFIER LA BASE DE DONNÉES --------
+  sqlite3 $DB_DIR/siem_africa.db ".tables"
+  sqlite3 $DB_DIR/siem_africa.db "SELECT COUNT(*) as 'Nombre de règles' FROM regles;"
+  sqlite3 $DB_DIR/siem_africa.db "SELECT COUNT(*) as 'Nombre de catégories' FROM categories;"
+
+  # -------- VÉRIFIER L'UTILISATEUR ADMIN --------
+  sqlite3 $DB_DIR/siem_africa.db "SELECT username, must_change_password, password_expires_at FROM utilisateurs;"
+
+  # -------- VÉRIFIER LE CERTIFICAT SSL --------
+  ls -la $SSL_DIR/
+  openssl x509 -in $SSL_DIR/cert.pem -text -noout | head -20
+
+  # -------- TESTER LA CONNEXION HTTPS --------
+  curl -k https://localhost:5000/login
+
+  # -------- REDÉMARRER LES SERVICES --------
+  systemctl restart siem-africa-agent
+  systemctl restart siem-africa-dashboard
+
+  # -------- ARRÊTER LES SERVICES --------
+  systemctl stop siem-africa-dashboard
+  systemctl stop siem-africa-agent
+
+  # -------- VOIR LES DERNIÈRES ALERTES --------
+  sqlite3 $DB_DIR/siem_africa.db "SELECT id, timestamp, wazuh_rule_id, source_ip, statut FROM alertes_log ORDER BY timestamp DESC LIMIT 10;"
+
+  # -------- VOIR LE JOURNAL D'AUDIT --------
+  sqlite3 $DB_DIR/siem_africa.db "SELECT timestamp, username, action, ip_address, success FROM audit_log ORDER BY timestamp DESC LIMIT 20;"
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                            FICHIERS INSTALLÉS                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  📂 $INSTALL_DIR/
+     ├── config.json              (Configuration Wazuh API)
+     ├── database/
+     │   ├── siem_africa_db.sql   (Script SQL)
+     │   └── siem_africa.db       (Base de données SQLite)
+     ├── dashboard/
+     │   ├── app.py               (Application Flask)
+     │   ├── agent.py             (Agent d'interprétation)
+     │   └── templates/
+     │       ├── login.html       (Page de connexion)
+     │       ├── change_password.html (Changement mot de passe)
+     │       ├── index.html       (Tableau de bord)
+     │       ├── detail.html      (Détail alerte)
+     │       └── alertes.html     (Liste des alertes)
+     ├── ssl/
+     │   ├── cert.pem             (Certificat SSL)
+     │   └── key.pem              (Clé privée SSL)
+     └── venv/                    (Environnement Python)
+
+  📂 /var/log/siem-africa/
+     └── agent.log                (Logs de l'agent)
+
+  📂 /etc/systemd/system/
+     ├── siem-africa-agent.service
+     └── siem-africa-dashboard.service
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                           PORTS UTILISÉS                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  Port 5000  - Dashboard SIEM Africa (HTTPS)
+  Port 55000 - API Wazuh
+  Port 1514  - Agent Wazuh
+  Port 1515  - Agent Wazuh (enregistrement)
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         NOTES IMPORTANTES                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  • Le certificat SSL est auto-signé. Le navigateur affichera un avertissement.
+    → Cliquez sur "Avancé" puis "Continuer vers le site"
+
+  • Changez le mot de passe dès la première connexion
+
+  • Le compte sera verrouillé après 5 tentatives échouées pendant 15 minutes
+
+  • Le mot de passe expire après 90 jours
+    → Alertes à 15 jours et 5 jours avant expiration
+
+  • En cas de problème, vérifiez les logs:
+    tail -f /var/log/siem-africa/agent.log
+    journalctl -u siem-africa-dashboard -f
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                              SUPPORT                                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  📧 Projet: SIEM AFRICA
+  📅 Version: 2.0
+================================================================================
+                    FIN DU FICHIER CRIDS - SIEM AFRICA
+================================================================================
+EOF
+    
+    chmod 600 "$CRIDS_FILE"
+    log_success "Fichier CRIDS créé: $CRIDS_FILE"
+}
+
+# =============================================================================
+# RÉSUMÉ FINAL
+# =============================================================================
+
+print_summary() {
+    # Obtenir l'IP
+    IP_ADDR=$(hostname -I | awk '{print $1}')
     
     echo ""
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║     ✓ INSTALLATION TERMINÉE AVEC SUCCÈS !                       ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                                                              ║${NC}"
+    echo -e "${GREEN}║           ✅ INSTALLATION TERMINÉE AVEC SUCCÈS !            ║${NC}"
+    echo -e "${GREEN}║                                                              ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${BLUE}ACCÈS AU DASHBOARD${NC}"
-    echo -e "  URL         : ${GREEN}http://$IP:5000${NC}"
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                   INFORMATIONS DE CONNEXION                  ║${NC}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${CYAN}║                                                              ║${NC}"
+    echo -e "${CYAN}║  🌐 URL Dashboard:                                          ║${NC}"
+    echo -e "${CYAN}║     ${YELLOW}https://$IP_ADDR:5000${CYAN}                              ║${NC}"
+    echo -e "${CYAN}║                                                              ║${NC}"
+    echo -e "${CYAN}║  👤 Utilisateur:  ${YELLOW}admin${CYAN}                                   ║${NC}"
+    echo -e "${CYAN}║  🔒 Mot de passe: ${YELLOW}${DEFAULT_PASSWORD}${CYAN}                        ║${NC}"
+    echo -e "${CYAN}║                                                              ║${NC}"
+    echo -e "${CYAN}║  ⚠️  Vous devrez changer le mot de passe à la première      ║${NC}"
+    echo -e "${CYAN}║     connexion (validité: 90 jours)                          ║${NC}"
+    echo -e "${CYAN}║                                                              ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${BLUE}SERVICES${NC}"
-    echo -e "  Agent       : systemctl status siem-africa-agent"
-    echo -e "  Dashboard   : systemctl status siem-africa-dashboard"
+    echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║                    📄 FICHIER CRIDS CRÉÉ                     ║${NC}"
+    echo -e "${YELLOW}╠══════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${YELLOW}║                                                              ║${NC}"
+    echo -e "${YELLOW}║  Toutes les informations et commandes ont été sauvegardées  ║${NC}"
+    echo -e "${YELLOW}║  dans le fichier:                                           ║${NC}"
+    echo -e "${YELLOW}║                                                              ║${NC}"
+    echo -e "${YELLOW}║     ${GREEN}$CRIDS_FILE${YELLOW}                    ║${NC}"
+    echo -e "${YELLOW}║                                                              ║${NC}"
+    echo -e "${YELLOW}║  Pour consulter ce fichier:                                 ║${NC}"
+    echo -e "${YELLOW}║     ${GREEN}cat $CRIDS_FILE${YELLOW}                    ║${NC}"
+    echo -e "${YELLOW}║                                                              ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${BLUE}FICHIERS${NC}"
-    echo -e "  Installation: $INSTALL_DIR"
-    echo -e "  Base données: $INSTALL_DIR/database/siem_africa.db"
-    echo -e "  Config      : $INSTALL_DIR/config.json"
-    echo -e "  Logs agent  : /var/log/siem-africa/agent.log"
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                   COMMANDES RAPIDES                          ║${NC}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${CYAN}║                                                              ║${NC}"
+    echo -e "${CYAN}║  ${GREEN}systemctl status siem-africa-agent${CYAN}        → Statut agent  ║${NC}"
+    echo -e "${CYAN}║  ${GREEN}systemctl status siem-africa-dashboard${CYAN}    → Statut web   ║${NC}"
+    echo -e "${CYAN}║  ${GREEN}tail -f /var/log/siem-africa/agent.log${CYAN}    → Voir logs    ║${NC}"
+    echo -e "${CYAN}║  ${GREEN}cat /root/SIEM_AFRICA_CRIDS.txt${CYAN}           → Voir CRIDS   ║${NC}"
+    echo -e "${CYAN}║                                                              ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${BLUE}COMMANDES UTILES${NC}"
-    echo -e "  Voir les logs : tail -f /var/log/siem-africa/agent.log"
-    echo -e "  Redémarrer    : sudo systemctl restart siem-africa-agent siem-africa-dashboard"
-    echo ""
-    echo -e "${YELLOW}📊 L'agent analyse les alertes Wazuh toutes les 30 secondes${NC}"
-    echo -e "${YELLOW}🌐 Ouvrez votre navigateur sur http://$IP:5000${NC}"
+    echo -e "${GREEN}🎉 Installation terminée ! Accédez au dashboard :${NC}"
+    echo -e "${GREEN}   ${YELLOW}https://$IP_ADDR:5000${NC}"
     echo ""
 }
 
 # =============================================================================
-# MAIN
+# PROGRAMME PRINCIPAL
 # =============================================================================
 
 main() {
-    # Créer le fichier de log
-    mkdir -p /var/log
-    touch "$LOG_FILE"
+    print_banner
     
-    show_banner
+    log_info "Démarrage de l'installation..."
+    echo ""
     
+    # Vérifications
     check_root
     check_wazuh
     
+    # Installation
     install_dependencies
     create_directories
+    generate_ssl_certificate
     download_files
     setup_database
     setup_python_env
-    get_wazuh_password
-    create_config
-    create_systemd_services
+    get_wazuh_credentials
+    create_services
+    configure_firewall
     start_services
     
-    show_summary
+    # Créer le fichier CRIDS
+    create_crids_file
+    
+    # Résumé
+    print_summary
 }
 
+# Exécution
 main "$@"
