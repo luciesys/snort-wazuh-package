@@ -5,157 +5,642 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SIEM Africa - Tableau de Bord</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+        
         :root {
-            --primary-color: #1a5f2a;
-            --secondary-color: #ffd700;
+            --primary-green: #1a5f2a;
+            --secondary-green: #2d8a3e;
+            --light-green: #e8f5e9;
             --dark-bg: #1a1a2e;
         }
         
         body {
-            background-color: #f5f6fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            min-height: 100vh;
         }
         
+        /* Navbar */
         .navbar {
-            background: linear-gradient(135deg, var(--primary-color), #2d8a3e);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            padding: 12px 0;
         }
         
         .navbar-brand {
-            font-weight: bold;
+            font-weight: 700;
             font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         
-        .stat-card {
-            border-radius: 15px;
+        .navbar-brand .logo {
+            font-size: 1.8rem;
+        }
+        
+        .nav-link {
+            font-weight: 500;
+            padding: 8px 16px !important;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255,255,255,0.15);
+        }
+        
+        .user-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        /* Password Warning */
+        .password-warning {
+            border-radius: 0;
+            margin: 0;
             border: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
+            padding: 12px 20px;
+            font-weight: 500;
+        }
+        
+        /* Main Content */
+        .main-content {
+            padding: 25px;
+        }
+        
+        /* Cards */
+        .dashboard-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: none;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+            height: 100%;
+        }
+        
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+        
+        .card-header-custom {
+            background: linear-gradient(135deg, #f8f9fa, #fff);
+            padding: 16px 20px;
+            border-bottom: 2px solid #f0f0f0;
+            font-weight: 600;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* Security Score */
+        .security-score-card {
+            background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+        }
+        
+        .score-circle {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            border: 8px solid rgba(255,255,255,0.3);
+            position: relative;
+        }
+        
+        .score-value {
+            font-size: 48px;
+            font-weight: 700;
+        }
+        
+        .score-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .score-status {
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        
+        /* Stat Cards */
+        .stat-card {
+            text-align: center;
+            padding: 25px 15px;
+            border-radius: 16px;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+            height: 100%;
         }
         
         .stat-card:hover {
             transform: translateY(-5px);
         }
         
-        .stat-card .stat-number {
-            font-size: 2.5rem;
-            font-weight: bold;
+        .stat-card.critique { border-top: 4px solid #dc3545; }
+        .stat-card.haute { border-top: 4px solid #fd7e14; }
+        .stat-card.moyenne { border-top: 4px solid #ffc107; }
+        .stat-card.faible { border-top: 4px solid #28a745; }
+        
+        .stat-number {
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 8px;
         }
         
-        .stat-card.critique { border-left: 5px solid #dc3545; }
-        .stat-card.haute { border-left: 5px solid #fd7e14; }
-        .stat-card.moyenne { border-left: 5px solid #ffc107; }
-        .stat-card.faible { border-left: 5px solid #28a745; }
+        .stat-label {
+            font-size: 13px;
+            color: #666;
+            font-weight: 500;
+        }
         
-        .alert-row {
-            transition: background-color 0.2s;
+        .stat-card.critique .stat-number { color: #dc3545; }
+        .stat-card.haute .stat-number { color: #fd7e14; }
+        .stat-card.moyenne .stat-number { color: #ffc107; }
+        .stat-card.faible .stat-number { color: #28a745; }
+        
+        /* Today Stats */
+        .today-stats {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 16px;
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .today-number {
+            font-size: 48px;
+            font-weight: 700;
+        }
+        
+        .today-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        /* Alert Table */
+        .alert-table {
+            margin: 0;
+        }
+        
+        .alert-table thead th {
+            background: #f8f9fa;
+            border: none;
+            font-weight: 600;
+            font-size: 13px;
+            color: #555;
+            padding: 14px 16px;
+        }
+        
+        .alert-table tbody td {
+            padding: 14px 16px;
+            vertical-align: middle;
+            border-color: #f0f0f0;
+        }
+        
+        .alert-table tbody tr {
+            transition: background 0.2s;
             cursor: pointer;
         }
         
-        .alert-row:hover {
-            background-color: #e9ecef;
+        .alert-table tbody tr:hover {
+            background: #f8f9fa;
         }
         
-        .badge-critique { background-color: #dc3545; }
-        .badge-haute { background-color: #fd7e14; }
-        .badge-moyenne { background-color: #ffc107; color: #000; }
-        .badge-faible { background-color: #28a745; }
-        .badge-info { background-color: #17a2b8; }
-        
-        .status-nouveau { color: #dc3545; font-weight: bold; }
-        .status-vu { color: #fd7e14; }
-        .status-en_cours { color: #17a2b8; }
-        .status-traite { color: #28a745; }
-        
-        .category-badge {
-            font-size: 0.9rem;
-            padding: 5px 10px;
+        .badge-gravite {
+            padding: 6px 12px;
             border-radius: 20px;
-            background-color: #e9ecef;
+            font-weight: 500;
+            font-size: 12px;
         }
         
-        .footer {
-            background-color: var(--dark-bg);
-            color: #fff;
-            padding: 20px 0;
-            margin-top: 50px;
+        .badge-critique { background: #fee2e2; color: #dc2626; }
+        .badge-haute { background: #ffedd5; color: #ea580c; }
+        .badge-moyenne { background: #fef3c7; color: #d97706; }
+        .badge-faible { background: #d1fae5; color: #059669; }
+        .badge-info { background: #dbeafe; color: #2563eb; }
+        
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
         }
+        
+        .status-nouveau { background: #fee2e2; color: #dc2626; }
+        .status-vu { background: #ffedd5; color: #ea580c; }
+        .status-en_cours { background: #dbeafe; color: #2563eb; }
+        .status-traite { background: #d1fae5; color: #059669; }
+        
+        /* Top Lists */
+        .top-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .top-list li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+        }
+        
+        .top-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .top-list li:hover {
+            background: #f8f9fa;
+        }
+        
+        .top-rank {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--light-green);
+            color: var(--primary-green);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 13px;
+            margin-right: 12px;
+        }
+        
+        .top-rank.gold { background: #fef3c7; color: #d97706; }
+        .top-rank.silver { background: #e5e7eb; color: #6b7280; }
+        .top-rank.bronze { background: #ffedd5; color: #ea580c; }
+        
+        .top-value {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #333;
+        }
+        
+        .top-count {
+            background: #f0f0f0;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        /* Chart Container */
+        .chart-container {
+            padding: 20px;
+            height: 250px;
+        }
+        
+        /* Category Stats */
+        .category-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .category-item:last-child {
+            border-bottom: none;
+        }
+        
+        .category-icon {
+            font-size: 20px;
+            margin-right: 12px;
+        }
+        
+        .category-name {
+            flex: 1;
+            font-size: 14px;
+        }
+        
+        .category-count {
+            background: var(--light-green);
+            color: var(--primary-green);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        /* System Status */
+        .system-status {
+            padding: 16px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.active { background: #22c55e; }
+        .status-dot.warning { background: #f59e0b; }
+        .status-dot.error { background: #ef4444; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Footer */
+        .dashboard-footer {
+            background: var(--dark-bg);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .dashboard-footer p {
+            margin: 0;
+            opacity: 0.8;
+            font-size: 14px;
+        }
+        
+        /* Refresh Button */
+        .btn-refresh {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .btn-refresh:hover {
+            background: rgba(255,255,255,0.3);
+            color: white;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+        
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .animate-in {
+            animation: fadeInUp 0.5s ease-out forwards;
+        }
+        
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
     </style>
 </head>
 <body>
+    <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/">🛡️ SIEM AFRICA</a>
+        <div class="container-fluid px-4">
+            <a class="navbar-brand" href="/">
+                <span class="logo">🛡️</span>
+                SIEM AFRICA
+            </a>
+            
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
+            
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" href="/">Tableau de Bord</a>
+                        <a class="nav-link active" href="/">📊 Tableau de Bord</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/alertes">Toutes les Alertes</a>
+                        <a class="nav-link" href="/alertes">📋 Toutes les Alertes</a>
                     </li>
                 </ul>
-                <div class="d-flex align-items-center text-white">
-                    <span class="me-3">{{ total_alertes }} alertes actives</span>
-                    <button class="btn btn-outline-light btn-sm" onclick="location.reload()" title="Actualiser">
+                
+                <div class="d-flex align-items-center gap-3">
+                    <span class="user-badge">
+                        👤 {{ username }}
+                    </span>
+                    <a href="/change-password" class="btn btn-sm btn-outline-light">🔑 Mot de passe</a>
+                    <button class="btn-refresh" onclick="location.reload()">
                         🔄 Actualiser
                     </button>
+                    <a href="/logout" class="btn btn-sm btn-outline-light">🚪 Déconnexion</a>
                 </div>
             </div>
         </div>
     </nav>
-
-    <div class="container mt-4">
-        <div class="row mb-4">
-            <div class="col-md-3 mb-3">
-                <div class="card stat-card critique">
-                    <div class="card-body text-center">
-                        <div class="stat-number text-danger">{{ stats_gravite.get('critique', 0) }}</div>
-                        <div class="text-muted">🔴 Critique</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card stat-card haute">
-                    <div class="card-body text-center">
-                        <div class="stat-number" style="color: #fd7e14;">{{ stats_gravite.get('haute', 0) }}</div>
-                        <div class="text-muted">🟠 Haute</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card stat-card moyenne">
-                    <div class="card-body text-center">
-                        <div class="stat-number" style="color: #ffc107;">{{ stats_gravite.get('moyenne', 0) }}</div>
-                        <div class="text-muted">🟡 Moyenne</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card stat-card faible">
-                    <div class="card-body text-center">
-                        <div class="stat-number text-success">{{ stats_gravite.get('faible', 0) + stats_gravite.get('info', 0) }}</div>
-                        <div class="text-muted">🟢 Faible/Info</div>
-                    </div>
-                </div>
+    
+    <!-- Password Warning -->
+    {% if password_warning %}
+    <div class="alert alert-{{ password_warning.level }} password-warning mb-0">
+        <div class="container-fluid">
+            <div class="d-flex align-items-center justify-content-between">
+                <span>{{ password_warning.message }}</span>
+                <a href="{{ url_for('change_password') }}" class="btn btn-sm btn-{{ password_warning.level }}">
+                    Changer maintenant
+                </a>
             </div>
         </div>
-
-        <div class="row">
-            <div class="col-lg-8 mb-4">
-                <div class="card">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">📋 Dernières Alertes</h5>
-                        <a href="/alertes" class="btn btn-sm btn-outline-primary">Voir tout</a>
+    </div>
+    {% endif %}
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container-fluid">
+            <!-- Row 1: Security Score + Stats -->
+            <div class="row g-4 mb-4">
+                <!-- Security Score -->
+                <div class="col-lg-3 col-md-6 animate-in">
+                    <div class="dashboard-card security-score-card">
+                        <div class="score-circle">
+                            <span class="score-value">{{ security_score }}</span>
+                        </div>
+                        <div class="score-label">Score de Sécurité</div>
+                        <div class="score-status">
+                            {% if security_score >= 80 %}
+                                ✅ Bon état
+                            {% elif security_score >= 50 %}
+                                ⚠️ Attention requise
+                            {% else %}
+                                🚨 État critique
+                            {% endif %}
+                        </div>
                     </div>
-                    <div class="card-body p-0">
+                </div>
+                
+                <!-- Today Stats -->
+                <div class="col-lg-3 col-md-6 animate-in delay-1">
+                    <div class="dashboard-card today-stats">
+                        <div class="today-number">{{ alertes_today }}</div>
+                        <div class="today-label">Alertes Aujourd'hui</div>
+                        <hr style="opacity: 0.3; margin: 20px 0;">
+                        <div class="today-number" style="font-size: 32px;">{{ total_alertes }}</div>
+                        <div class="today-label">Total Non Traitées</div>
+                    </div>
+                </div>
+                
+                <!-- Gravity Stats -->
+                <div class="col-lg-6 animate-in delay-2">
+                    <div class="row g-3 h-100">
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card critique">
+                                <div class="stat-number">{{ stats_gravite.get('critique', 0) }}</div>
+                                <div class="stat-label">🔴 Critique</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card haute">
+                                <div class="stat-number">{{ stats_gravite.get('haute', 0) }}</div>
+                                <div class="stat-label">🟠 Haute</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card moyenne">
+                                <div class="stat-number">{{ stats_gravite.get('moyenne', 0) }}</div>
+                                <div class="stat-label">🟡 Moyenne</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card faible">
+                                <div class="stat-number">{{ stats_gravite.get('faible', 0) + stats_gravite.get('info', 0) }}</div>
+                                <div class="stat-label">🟢 Faible</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Row 2: Chart + Top Lists -->
+            <div class="row g-4 mb-4">
+                <!-- Chart -->
+                <div class="col-lg-6 animate-in delay-3">
+                    <div class="dashboard-card">
+                        <div class="card-header-custom">
+                            📈 Alertes des dernières 24 heures
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="alertsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Top IPs -->
+                <div class="col-lg-3 col-md-6 animate-in delay-3">
+                    <div class="dashboard-card">
+                        <div class="card-header-custom">
+                            🔥 Top IP Attaquantes
+                        </div>
+                        <ul class="top-list">
+                            {% for ip in top_ips %}
+                            <li>
+                                <div class="d-flex align-items-center">
+                                    <span class="top-rank {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">
+                                        {{ loop.index }}
+                                    </span>
+                                    <span class="top-value">{{ ip.source_ip or 'N/A' }}</span>
+                                </div>
+                                <span class="top-count">{{ ip.total }}</span>
+                            </li>
+                            {% else %}
+                            <li class="empty-state">
+                                <div class="icon">🎉</div>
+                                <div>Aucune IP détectée</div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Top Rules -->
+                <div class="col-lg-3 col-md-6 animate-in delay-4">
+                    <div class="dashboard-card">
+                        <div class="card-header-custom">
+                            📋 Top Alertes
+                        </div>
+                        <ul class="top-list">
+                            {% for rule in top_rules %}
+                            <li>
+                                <div class="d-flex align-items-center" style="flex: 1; min-width: 0;">
+                                    <span class="top-rank {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">
+                                        {{ loop.index }}
+                                    </span>
+                                    <span class="text-truncate" style="font-size: 13px;">{{ rule.nom[:25] }}{% if rule.nom|length > 25 %}...{% endif %}</span>
+                                </div>
+                                <span class="top-count">{{ rule.total }}</span>
+                            </li>
+                            {% else %}
+                            <li class="empty-state">
+                                <div class="icon">✅</div>
+                                <div>Aucune alerte</div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Row 3: Alerts Table + Sidebar -->
+            <div class="row g-4">
+                <!-- Alerts Table -->
+                <div class="col-lg-8 animate-in">
+                    <div class="dashboard-card">
+                        <div class="card-header-custom">
+                            <span>🚨 Dernières Alertes</span>
+                            <a href="/alertes" class="btn btn-sm btn-outline-success ms-auto">Voir tout →</a>
+                        </div>
                         <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead class="table-light">
+                            <table class="table alert-table">
+                                <thead>
                                     <tr>
                                         <th>Gravité</th>
                                         <th>Heure</th>
@@ -168,25 +653,43 @@
                                 <tbody>
                                     {% for alerte in alertes %}
                                     {% set ginfo = get_gravite_info(alerte.gravite) %}
-                                    <tr class="alert-row" onclick="window.location='/alerte/{{ alerte.id }}'">
+                                    <tr onclick="window.location='/alerte/{{ alerte.id }}'">
                                         <td>
-                                            <span class="badge badge-{{ alerte.gravite }}">
+                                            <span class="badge-gravite badge-{{ alerte.gravite }}">
                                                 {{ ginfo.icon }} {{ ginfo.label }}
                                             </span>
                                         </td>
-                                        <td><small>{{ alerte.timestamp|timeago }}</small></td>
                                         <td>
-                                            <span class="category-badge me-2">{{ alerte.icone }}</span>
-                                            {{ alerte.nom_alerte[:40] }}{% if alerte.nom_alerte|length > 40 %}...{% endif %}
+                                            <small class="text-muted">{{ alerte.timestamp|timeago }}</small>
                                         </td>
-                                        <td><code>{{ alerte.source_ip or 'N/A' }}</code></td>
-                                        <td><span class="status-{{ alerte.statut }}">{{ alerte.statut|capitalize }}</span></td>
-                                        <td><a href="/alerte/{{ alerte.id }}" class="btn btn-sm btn-outline-secondary">Voir</a></td>
+                                        <td>
+                                            <span style="margin-right: 5px;">{{ alerte.icone }}</span>
+                                            {{ alerte.nom_alerte[:35] }}{% if alerte.nom_alerte|length > 35 %}...{% endif %}
+                                        </td>
+                                        <td>
+                                            <code style="background: #f0f0f0; padding: 3px 8px; border-radius: 4px;">
+                                                {{ alerte.source_ip or 'N/A' }}
+                                            </code>
+                                        </td>
+                                        <td>
+                                            <span class="status-badge status-{{ alerte.statut }}">
+                                                {{ alerte.statut|capitalize }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <a href="/alerte/{{ alerte.id }}" class="btn btn-sm btn-outline-secondary">
+                                                Voir
+                                            </a>
+                                        </td>
                                     </tr>
                                     {% else %}
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted py-4">
-                                            ✅ Aucune alerte active - Système sécurisé
+                                        <td colspan="6">
+                                            <div class="empty-state">
+                                                <div class="icon">✅</div>
+                                                <div>Aucune alerte active</div>
+                                                <small class="text-muted">Système sécurisé</small>
+                                            </div>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -195,51 +698,118 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div class="col-lg-4 mb-4">
-                <div class="card">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">📊 Par Catégorie</h5>
-                    </div>
-                    <div class="card-body">
-                        {% for cat in stats_categories %}
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div>
-                                <span class="me-2">{{ cat.icone }}</span>
-                                {{ cat.categorie }}
-                            </div>
-                            <span class="badge bg-secondary">{{ cat.total }}</span>
+                
+                <!-- Sidebar -->
+                <div class="col-lg-4">
+                    <!-- Categories -->
+                    <div class="dashboard-card mb-4 animate-in delay-2">
+                        <div class="card-header-custom">
+                            📊 Par Catégorie
                         </div>
-                        {% else %}
-                        <p class="text-muted text-center">Aucune donnée</p>
-                        {% endfor %}
+                        <div>
+                            {% for cat in stats_categories %}
+                            <div class="category-item">
+                                <span class="category-icon">{{ cat.icone }}</span>
+                                <span class="category-name">{{ cat.categorie }}</span>
+                                <span class="category-count">{{ cat.total }}</span>
+                            </div>
+                            {% else %}
+                            <div class="empty-state">
+                                <div class="icon">📭</div>
+                                <div>Aucune donnée</div>
+                            </div>
+                            {% endfor %}
+                        </div>
                     </div>
-                </div>
-
-                <div class="card mt-3">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">ℹ️ Système</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="mb-2"><strong>Agent:</strong> <span class="text-success">● Actif</span></p>
-                        <p class="mb-2"><strong>Wazuh:</strong> <span class="text-success">● Connecté</span></p>
-                        <p class="mb-0"><strong>Dernière MAJ:</strong> <small>{{ "maintenant" }}</small></p>
+                    
+                    <!-- System Status -->
+                    <div class="dashboard-card animate-in delay-3">
+                        <div class="card-header-custom">
+                            ⚙️ État du Système
+                        </div>
+                        <div class="system-status">
+                            <div class="status-item">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-dot active"></span>
+                                    <span>Agent SIEM Africa</span>
+                                </div>
+                                <span class="badge bg-success">Actif</span>
+                            </div>
+                            <div class="status-item">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-dot active"></span>
+                                    <span>Wazuh Manager</span>
+                                </div>
+                                <span class="badge bg-success">Connecté</span>
+                            </div>
+                            <div class="status-item">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-dot active"></span>
+                                    <span>Base de données</span>
+                                </div>
+                                <span class="badge bg-success">OK</span>
+                            </div>
+                            <div class="status-item">
+                                <div class="d-flex align-items-center">
+                                    <span>🕐 Dernière MAJ</span>
+                                </div>
+                                <span class="text-muted">Maintenant</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <footer class="footer text-center">
-        <div class="container">
-            <p class="mb-0">🛡️ <strong>SIEM AFRICA</strong> - Solution de Cybersécurité pour l'Afrique</p>
-            <small class="text-muted">IUT de Douala - 2026</small>
-        </div>
+    
+    <!-- Footer -->
+    <footer class="dashboard-footer">
+        <p>🛡️ <strong>SIEM AFRICA</strong> - Solution de Cybersécurité pour l'Afrique</p>
+        <p><small>IUT de Douala © 2026</small></p>
     </footer>
-
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Chart.js - Alertes par heure
+        const ctx = document.getElementById('alertsChart').getContext('2d');
+        const alertsData = {{ alertes_par_heure | tojson }};
+        
+        const labels = Object.keys(alertsData).sort();
+        const data = labels.map(h => alertsData[h]);
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels.map(h => h + 'h'),
+                datasets: [{
+                    label: 'Alertes',
+                    data: data,
+                    backgroundColor: 'rgba(45, 138, 62, 0.7)',
+                    borderColor: 'rgba(26, 95, 42, 1)',
+                    borderWidth: 1,
+                    borderRadius: 5,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Auto-refresh every 60 seconds
         setTimeout(function() {
             location.reload();
         }, 60000);
