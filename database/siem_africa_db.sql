@@ -1,542 +1,718 @@
--- ============================================================================
--- BASE DE DONNÉES SIEM AFRICA
--- 200 règles Wazuh traduites en français avec recommandations
--- ============================================================================
+-- =============================================================================
+-- ðŸ›¡ï¸  SIEM AFRICA - BASE DE DONNÃ‰ES COMPLÃˆTE v2.0
+-- =============================================================================
+-- Solution de CybersÃ©curitÃ© pour les PME Africaines
+-- IUT de Douala - Projet de Fin d'Ã‰tudes
+-- 
+-- Contenu: 25 catÃ©gories, 507 rÃ¨gles (207 Wazuh + 300 Snort)
+-- =============================================================================
+
+PRAGMA encoding = "UTF-8";
+PRAGMA foreign_keys = ON;
 
 -- Suppression des tables existantes
 DROP TABLE IF EXISTS recommandations;
 DROP TABLE IF EXISTS alertes_log;
 DROP TABLE IF EXISTS regles;
 DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS utilisateurs;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS audit_log;
 
--- ============================================================================
--- TABLE: CATEGORIES (Catégories officielles Wazuh + Non identifié)
--- ============================================================================
+-- =============================================================================
+-- TABLE: CATEGORIES (25 catÃ©gories)
+-- =============================================================================
+
 CREATE TABLE categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code TEXT UNIQUE NOT NULL,
     nom TEXT NOT NULL,
     description TEXT,
-    icone TEXT,
-    couleur TEXT
+    icone TEXT DEFAULT 'ðŸ””',
+    couleur TEXT DEFAULT '#6c757d'
 );
 
 INSERT INTO categories (code, nom, description, icone, couleur) VALUES
-('syslog', 'Logs Système', 'Événements système généraux (syslog, journald)', '⚙️', '#6c757d'),
-('firewall', 'Pare-feu', 'Événements de filtrage réseau et pare-feu', '🛡️', '#fd7e14'),
-('ids', 'Détection Intrusion', 'Alertes IDS/IPS (Snort, Suricata)', '🚨', '#dc3545'),
-('web_log', 'Serveurs Web', 'Logs Apache, Nginx, IIS', '🌐', '#0dcaf0'),
-('squid', 'Proxy', 'Logs proxy Squid et filtrage web', '🔀', '#6f42c1'),
-('windows', 'Windows', 'Événements Windows (EventLog)', '🪟', '#0d6efd'),
-('ossec', 'Wazuh Interne', 'Alertes internes de Wazuh/OSSEC', '👁️', '#20c997'),
-('authentication_success', 'Authentification Réussie', 'Connexions et authentifications réussies', '✅', '#198754'),
-('authentication_failed', 'Authentification Échouée', 'Tentatives de connexion échouées', '❌', '#dc3545'),
-('attack', 'Attaques', 'Attaques actives détectées', '⚔️', '#dc3545'),
-('malware', 'Malware', 'Logiciels malveillants détectés', '🦠', '#6f42c1'),
-('rootkit', 'Rootkit', 'Rootkits et backdoors détectés', '👾', '#343a40'),
-('file_integrity', 'Intégrité Fichiers', 'Modifications de fichiers surveillés (FIM)', '📁', '#ffc107'),
-('vulnerability', 'Vulnérabilités', 'Failles de sécurité détectées', '🔓', '#fd7e14'),
-('network', 'Réseau', 'Activité réseau suspecte', '📡', '#0dcaf0'),
-('policy', 'Politique', 'Violations des politiques de sécurité', '📋', '#6c757d'),
-('ssh', 'SSH', 'Connexions et événements SSH', '🔑', '#198754'),
-('sudo', 'Sudo', 'Utilisation des privilèges sudo', '👤', '#ffc107'),
-('pam', 'PAM', 'Modules d authentification PAM', '🔐', '#6c757d'),
-('non_identifie', 'Non Identifié', 'Alerte non reconnue par la base - Analyse manuelle requise', '❓', '#adb5bd');
+('authentification', 'Authentification', 'Alertes liÃ©es aux connexions', 'ðŸ”', '#dc3545'),
+('integrite', 'IntÃ©gritÃ© des fichiers', 'Modifications de fichiers surveillÃ©s', 'ðŸ“', '#fd7e14'),
+('rootkit', 'Rootkits & Malwares', 'DÃ©tection de logiciels malveillants', 'ðŸ¦ ', '#dc3545'),
+('politique', 'Politique de sÃ©curitÃ©', 'Violations des politiques', 'ðŸ“‹', '#ffc107'),
+('service', 'Services systÃ¨me', 'Alertes sur les services', 'âš™ï¸', '#17a2b8'),
+('reseau', 'RÃ©seau', 'ActivitÃ©s rÃ©seau suspectes', 'ðŸŒ', '#6f42c1'),
+('application', 'Applications', 'Alertes applications web', 'ðŸ’»', '#20c997'),
+('systeme', 'SystÃ¨me', 'Ã‰vÃ©nements systÃ¨me', 'ðŸ–¥ï¸', '#6c757d'),
+('audit', 'Audit', 'Journaux audit systÃ¨me', 'ðŸ“', '#17a2b8'),
+('pare_feu', 'Pare-feu', 'Alertes du pare-feu', 'ðŸ›¡ï¸', '#fd7e14'),
+('ids', 'DÃ©tection intrusion', 'Alertes IDS/IPS', 'ðŸš¨', '#dc3545'),
+('web', 'SÃ©curitÃ© Web', 'Attaques web', 'ðŸŒ', '#e83e8c'),
+('vulnerabilite', 'VulnÃ©rabilitÃ©s', 'Tentatives exploitation', 'ðŸ”“', '#dc3545'),
+('compliance', 'ConformitÃ©', 'Alertes conformitÃ©', 'âœ…', '#28a745'),
+('non_identifie', 'Non identifiÃ©', 'Alertes non catÃ©gorisÃ©es', 'â“', '#6c757d'),
+('scan', 'Scan & Reconnaissance', 'Scans de ports et reconnaissance', 'ðŸ”', '#fd7e14'),
+('injection_sql', 'Injection SQL', 'Tentatives injection SQL', 'ðŸ’‰', '#dc3545'),
+('xss', 'Cross-Site Scripting', 'Attaques XSS', 'ðŸ“œ', '#e83e8c'),
+('dos', 'DoS / DDoS', 'Attaques dÃ©ni de service', 'ðŸ’¥', '#dc3545'),
+('backdoor', 'Backdoors & Shells', 'Portes dÃ©robÃ©es', 'ðŸšª', '#dc3545'),
+('brute_force', 'Brute Force', 'Attaques force brute', 'ðŸ”¨', '#fd7e14'),
+('exploit', 'Exploits', 'Tentatives exploitation failles', 'ðŸŽ¯', '#dc3545'),
+('malware', 'Malware & Virus', 'Logiciels malveillants', 'ðŸ¦ ', '#dc3545'),
+('protocol', 'Protocoles suspects', 'Utilisation suspecte protocoles', 'ðŸ“¡', '#6f42c1'),
+('phishing', 'Phishing & Spam', 'Tentatives phishing', 'ðŸ“§', '#ffc107');
 
--- ============================================================================
--- TABLE: REGLES (200 règles Wazuh traduites)
--- ============================================================================
+-- =============================================================================
+-- TABLE: REGLES
+-- =============================================================================
+
 CREATE TABLE regles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     wazuh_rule_id INTEGER UNIQUE NOT NULL,
     nom_fr TEXT NOT NULL,
-    description TEXT NOT NULL,
-    gravite TEXT CHECK(gravite IN ('critique', 'haute', 'moyenne', 'faible', 'info')) NOT NULL,
+    description TEXT,
+    gravite TEXT CHECK(gravite IN ('critique', 'haute', 'moyenne', 'faible', 'info')) DEFAULT 'moyenne',
     categorie_id INTEGER,
     impact TEXT,
     cause_probable TEXT,
     mitre_id TEXT,
+    source TEXT DEFAULT 'wazuh',
     FOREIGN KEY (categorie_id) REFERENCES categories(id)
 );
 
--- ============================================================================
--- RÈGLES SSH (5700-5799)
--- ============================================================================
-INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id) VALUES
-(5701, 'Connexion SSH possible par attaque brute force', 'Plusieurs tentatives de connexion SSH ont réussi après de nombreux échecs. Cela indique une possible compromission par attaque brute force.', 'critique', 17, 'Accès non autorisé au serveur', 'Mot de passe faible ou attaque automatisée', 'T1110'),
-(5702, 'Connexion SSH inversée détectée', 'Une connexion SSH inversée (reverse shell) a été détectée. Un attaquant pourrait contrôler le serveur à distance.', 'critique', 17, 'Contrôle à distance par un attaquant', 'Serveur compromis ou backdoor installée', 'T1572'),
-(5703, 'Tentative de connexion SSH avec utilisateur inexistant', 'Quelqu un a tenté de se connecter avec un nom d utilisateur qui n existe pas sur le système.', 'moyenne', 17, 'Reconnaissance du système', 'Scan automatisé ou attaque ciblée', 'T1078'),
-(5704, 'Tentative de connexion SSH avec utilisateur root', 'Une tentative de connexion directe en tant que root a été détectée. Cette pratique est dangereuse.', 'haute', 17, 'Tentative d accès privilégié', 'Attaque brute force sur root', 'T1078'),
-(5705, 'Authentification SSH échouée', 'Une tentative de connexion SSH a échoué. Cela peut être une erreur de mot de passe ou une tentative d intrusion.', 'faible', 17, 'Aucun si isolé', 'Erreur utilisateur ou tentative d intrusion', 'T1110'),
-(5706, 'Authentification SSH réussie', 'Une connexion SSH a été établie avec succès.', 'info', 8, 'Session ouverte sur le serveur', 'Connexion légitime ou compromission', NULL),
-(5707, 'Tentatives multiples de connexion SSH échouées', 'Plusieurs tentatives de connexion SSH ont échoué en peu de temps. Probable attaque brute force en cours.', 'haute', 17, 'Surcharge du service SSH', 'Attaque brute force automatisée', 'T1110'),
-(5708, 'Déconnexion SSH', 'Une session SSH a été fermée normalement.', 'info', 17, 'Aucun', 'Déconnexion normale', NULL),
-(5709, 'Erreur de protocole SSH', 'Une erreur de protocole SSH a été détectée. Possible tentative d exploitation.', 'moyenne', 17, 'Instabilité du service', 'Client incompatible ou attaque', 'T1190'),
-(5710, 'Tentative de connexion SSH - mot de passe incorrect', 'Le mot de passe fourni pour la connexion SSH est incorrect.', 'faible', 9, 'Aucun si isolé', 'Erreur de frappe ou attaque', 'T1110'),
-(5711, 'Attaque brute force SSH détectée', 'Un grand nombre de tentatives de connexion SSH échouées ont été détectées depuis la même IP.', 'critique', 10, 'Risque de compromission', 'Attaque automatisée', 'T1110'),
-(5712, 'Connexion SSH depuis une nouvelle IP', 'Une connexion SSH réussie provient d une adresse IP jamais vue auparavant.', 'moyenne', 8, 'Possible accès non autorisé', 'Nouvel emplacement ou compromission', 'T1078'),
-(5715, 'Trop de sessions SSH ouvertes', 'Le nombre maximum de sessions SSH simultanées a été atteint.', 'moyenne', 17, 'Déni de service possible', 'Charge normale ou attaque', 'T1499'),
-(5716, 'Clé SSH invalide utilisée', 'Une tentative de connexion avec une clé SSH non autorisée a été détectée.', 'haute', 9, 'Tentative d accès non autorisé', 'Clé volée ou mauvaise configuration', 'T1078'),
-(5720, 'Version SSH obsolète détectée', 'Un client utilise une version SSH ancienne et potentiellement vulnérable.', 'moyenne', 14, 'Risque d exploitation', 'Client non mis à jour', 'T1190'),
+-- =============================================================================
+-- RÃˆGLES WAZUH (207 rÃ¨gles)
+-- =============================================================================
 
--- ============================================================================
--- RÈGLES AUTHENTIFICATION PAM (5500-5599)
--- ============================================================================
-(5500, 'Connexion utilisateur réussie', 'Un utilisateur s est connecté avec succès au système.', 'info', 8, 'Session ouverte', 'Connexion normale', NULL),
-(5501, 'Session utilisateur ouverte', 'Une nouvelle session a été ouverte pour un utilisateur.', 'info', 8, 'Accès au système', 'Connexion normale', NULL),
-(5502, 'Session utilisateur fermée', 'La session d un utilisateur a été fermée.', 'info', 8, 'Aucun', 'Déconnexion normale', NULL),
-(5503, 'Échec d authentification utilisateur', 'L authentification d un utilisateur a échoué.', 'moyenne', 9, 'Accès refusé', 'Mauvais mot de passe ou attaque', 'T1110'),
-(5504, 'Compte utilisateur verrouillé', 'Un compte a été verrouillé après trop de tentatives échouées.', 'haute', 9, 'Utilisateur bloqué', 'Attaque brute force ou oubli', 'T1110'),
-(5505, 'Tentative de connexion avec compte désactivé', 'Quelqu un a tenté de se connecter avec un compte désactivé.', 'moyenne', 9, 'Aucun', 'Ancien employé ou erreur', 'T1078'),
-(5506, 'Changement de mot de passe', 'Un utilisateur a changé son mot de passe.', 'info', 19, 'Mot de passe modifié', 'Action normale', NULL),
-(5507, 'Changement de mot de passe échoué', 'Une tentative de changement de mot de passe a échoué.', 'faible', 19, 'Aucun', 'Mot de passe non conforme', NULL),
-(5508, 'Compte utilisateur expiré', 'Un compte a expiré et l accès a été refusé.', 'moyenne', 9, 'Accès bloqué', 'Compte temporaire expiré', NULL),
-(5509, 'Mot de passe expiré', 'Le mot de passe d un utilisateur a expiré.', 'faible', 19, 'Changement requis', 'Politique de sécurité', NULL),
-(5510, 'Utilisateur ajouté au système', 'Un nouvel utilisateur a été créé sur le système.', 'moyenne', 16, 'Nouveau compte', 'Administration normale ou compromission', 'T1136'),
-(5511, 'Utilisateur supprimé du système', 'Un utilisateur a été supprimé du système.', 'moyenne', 16, 'Compte supprimé', 'Administration normale', NULL),
-(5512, 'Groupe utilisateur modifié', 'Les groupes d un utilisateur ont été modifiés.', 'moyenne', 16, 'Permissions changées', 'Administration ou élévation', 'T1078'),
-(5513, 'Utilisateur ajouté au groupe sudo', 'Un utilisateur a été ajouté au groupe des administrateurs (sudo).', 'haute', 18, 'Nouveaux privilèges admin', 'Administration ou compromission', 'T1078'),
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+-- Authentification SSH
+(5501, 'Connexion PAM rÃ©ussie', 'Authentification PAM rÃ©ussie', 'info', 1, 'Utilisateur connectÃ©', 'Connexion normale', 'T1078', 'wazuh'),
+(5502, 'Ã‰chec authentification PAM', 'Ã‰chec authentification PAM', 'moyenne', 1, 'Tentative connexion Ã©chouÃ©e', 'Mot de passe incorrect', 'T1110', 'wazuh'),
+(5503, 'Compte utilisateur verrouillÃ©', 'Compte verrouillÃ© aprÃ¨s Ã©checs', 'haute', 1, 'Utilisateur bloquÃ©', 'Trop de tentatives Ã©chouÃ©es', 'T1110', 'wazuh'),
+(5504, 'Session PAM ouverte', 'Nouvelle session utilisateur', 'info', 1, 'Session dÃ©marrÃ©e', 'Connexion normale', 'T1078', 'wazuh'),
+(5505, 'Session PAM fermÃ©e', 'Session utilisateur fermÃ©e', 'info', 1, 'Session terminÃ©e', 'DÃ©connexion normale', 'T1078', 'wazuh'),
+(5551, 'Connexion SSH rÃ©ussie', 'Connexion SSH avec succÃ¨s', 'info', 1, 'AccÃ¨s distant Ã©tabli', 'Connexion SSH lÃ©gitime', 'T1021.004', 'wazuh'),
+(5710, 'Tentative connexion SSH Ã©chouÃ©e', 'Ã‰chec de connexion SSH', 'moyenne', 1, 'Tentative accÃ¨s Ã©chouÃ©e', 'Mot de passe ou clÃ© invalide', 'T1110.001', 'wazuh'),
+(5711, 'Plusieurs Ã©checs SSH - Possible brute force', 'Multiples Ã©checs SSH dÃ©tectÃ©s', 'haute', 1, 'Possible attaque brute force', 'Attaquant devine mot de passe', 'T1110.001', 'wazuh'),
+(5712, 'Attaque brute force SSH confirmÃ©e', 'Attaque brute force SSH confirmÃ©e', 'critique', 1, 'Serveur sous attaque', 'Outil de brute force utilisÃ©', 'T1110.001', 'wazuh'),
+(5715, 'Connexion SSH root refusÃ©e', 'Connexion root SSH refusÃ©e', 'haute', 1, 'Tentative accÃ¨s root', 'Config SSH interdit root', 'T1078.003', 'wazuh'),
+(5716, 'Auth SSH par clÃ© rÃ©ussie', 'Connexion SSH par clÃ© publique', 'info', 1, 'AccÃ¨s sÃ©curisÃ© par clÃ©', 'Auth par clÃ© configurÃ©e', 'T1021.004', 'wazuh'),
+(5720, 'Utilisateur SSH invalide', 'Tentative avec utilisateur inexistant', 'moyenne', 1, 'Test de noms utilisateurs', 'Reconnaissance ou erreur', 'T1078', 'wazuh'),
+(5721, 'DÃ©connexion SSH', 'Utilisateur dÃ©connectÃ© de SSH', 'info', 1, 'Session SSH terminÃ©e', 'DÃ©connexion volontaire', 'T1078', 'wazuh'),
+(5722, 'SSH depuis IP interdite', 'Connexion depuis IP bloquÃ©e', 'haute', 1, 'AccÃ¨s depuis source non autorisÃ©e', 'IP dans liste noire', 'T1021.004', 'wazuh'),
+(5601, 'Connexion FTP rÃ©ussie', 'Connexion FTP Ã©tablie', 'info', 1, 'AccÃ¨s FTP Ã©tabli', 'Connexion FTP normale', 'T1021', 'wazuh'),
+(5602, 'Ã‰chec connexion FTP', 'Tentative FTP Ã©chouÃ©e', 'moyenne', 1, 'AccÃ¨s FTP refusÃ©', 'Identifiants incorrects', 'T1110', 'wazuh'),
+(5901, 'Connexion sudo rÃ©ussie', 'Commande sudo exÃ©cutÃ©e', 'info', 1, 'Commande privilÃ©giÃ©e exÃ©cutÃ©e', 'Utilisation normale sudo', 'T1548.003', 'wazuh'),
+(5902, 'Ã‰chec sudo - Mot de passe incorrect', 'Ã‰chec authentification sudo', 'moyenne', 1, 'Ã‰lÃ©vation privilÃ¨ges Ã©chouÃ©e', 'Mot de passe incorrect', 'T1548.003', 'wazuh'),
+(5903, 'Sudo - Utilisateur non autorisÃ©', 'Utilisateur non autorisÃ© sudo', 'haute', 1, 'Tentative accÃ¨s root non autorisÃ©', 'Utilisateur pas dans groupe sudo', 'T1548.003', 'wazuh'),
+(5904, 'Sudo - Commande non autorisÃ©e', 'Commande sudo interdite', 'haute', 1, 'Tentative contournement restrictions', 'Commande pas dans sudoers', 'T1548.003', 'wazuh'),
+(5905, 'Sudo - 3 Ã©checs consÃ©cutifs', 'Trois Ã©checs sudo consÃ©cutifs', 'haute', 1, 'Possible brute force sudo', 'Oubli mot de passe ou attaque', 'T1548.003', 'wazuh'),
+(5301, 'Connexion utilisateur rÃ©ussie', 'Utilisateur connectÃ© au systÃ¨me', 'info', 1, 'Session utilisateur dÃ©marrÃ©e', 'Connexion normale', 'T1078', 'wazuh'),
+(5302, 'DÃ©connexion utilisateur', 'Utilisateur dÃ©connectÃ©', 'info', 1, 'Session terminÃ©e', 'DÃ©connexion normale', 'T1078', 'wazuh'),
+(5303, 'Changement utilisateur (su)', 'Commande su utilisÃ©e', 'info', 1, 'Changement contexte utilisateur', 'Utilisation normale su', 'T1548.003', 'wazuh'),
+(5304, 'Ã‰chec changement utilisateur', 'Commande su Ã©chouÃ©e', 'moyenne', 1, 'Changement utilisateur refusÃ©', 'Mot de passe incorrect', 'T1548.003', 'wazuh'),
 
--- ============================================================================
--- RÈGLES SUDO (5400-5499)
--- ============================================================================
-(5400, 'Commande sudo exécutée', 'Un utilisateur a exécuté une commande avec les privilèges sudo.', 'info', 18, 'Action privilégiée', 'Administration normale', NULL),
-(5401, 'Tentative sudo non autorisée', 'Un utilisateur a tenté d utiliser sudo sans y être autorisé.', 'haute', 18, 'Tentative d élévation', 'Erreur ou tentative malveillante', 'T1548'),
-(5402, 'Mauvais mot de passe sudo', 'Un utilisateur a entré un mauvais mot de passe pour sudo.', 'moyenne', 18, 'Accès sudo refusé', 'Erreur ou tentative', 'T1548'),
-(5403, 'Trois échecs sudo consécutifs', 'Un utilisateur a échoué trois fois à s authentifier pour sudo.', 'haute', 18, 'Possible attaque', 'Attaque ou oubli mot de passe', 'T1548'),
-(5404, 'Commande sudo interdite', 'Un utilisateur a tenté d exécuter une commande sudo non autorisée.', 'haute', 18, 'Violation de politique', 'Tentative de contournement', 'T1548'),
-(5405, 'Session sudo ouverte', 'Une session sudo a été ouverte pour un utilisateur.', 'info', 18, 'Session admin active', 'Administration normale', NULL),
-(5406, 'Session sudo fermée', 'Une session sudo a été fermée.', 'info', 18, 'Aucun', 'Fin normale', NULL),
-(5407, 'Sudo exécuté en tant que autre utilisateur', 'Un utilisateur a utilisé sudo pour agir en tant qu un autre utilisateur.', 'moyenne', 18, 'Usurpation d identité', 'Administration ou abus', 'T1548'),
+-- IntÃ©gritÃ© fichiers
+(550, 'Fichier ajoutÃ©', 'Nouveau fichier crÃ©Ã©', 'moyenne', 2, 'Nouveau fichier dÃ©tectÃ©', 'Installation ou crÃ©ation manuelle', 'T1027', 'wazuh'),
+(551, 'Fichier modifiÃ©', 'Fichier surveillÃ© modifiÃ©', 'moyenne', 2, 'Contenu fichier modifiÃ©', 'Mise Ã  jour ou modification suspecte', 'T1565.001', 'wazuh'),
+(552, 'Fichier supprimÃ©', 'Fichier surveillÃ© supprimÃ©', 'haute', 2, 'Fichier critique supprimÃ©', 'Suppression manuelle ou malware', 'T1485', 'wazuh'),
+(553, 'Permissions fichier modifiÃ©es', 'Permissions fichier changÃ©es', 'moyenne', 2, 'Droits accÃ¨s modifiÃ©s', 'Changement configuration', 'T1222', 'wazuh'),
+(554, 'PropriÃ©taire fichier modifiÃ©', 'PropriÃ©taire fichier changÃ©', 'moyenne', 2, 'PropriÃ©tÃ© fichier transfÃ©rÃ©e', 'Changement administratif', 'T1222', 'wazuh'),
+(591, 'Modification /etc/passwd', 'Fichier passwd modifiÃ©', 'haute', 2, 'Comptes utilisateurs modifiÃ©s', 'Ajout ou modification compte', 'T1136', 'wazuh'),
+(592, 'Modification /etc/shadow', 'Fichier shadow modifiÃ©', 'haute', 2, 'Mots de passe modifiÃ©s', 'Changement mot de passe', 'T1003', 'wazuh'),
+(593, 'Modification /etc/group', 'Fichier groupes modifiÃ©', 'moyenne', 2, 'Groupes systÃ¨me modifiÃ©s', 'Ajout ou modification groupe', 'T1136', 'wazuh'),
+(594, 'Modification /etc/sudoers', 'Fichier sudoers modifiÃ©', 'critique', 2, 'PrivilÃ¨ges sudo modifiÃ©s', 'Changement droits admin', 'T1548.003', 'wazuh'),
+(516, 'Alerte intÃ©gritÃ© - Fichier critique', 'Fichier systÃ¨me critique modifiÃ©', 'critique', 2, 'IntÃ©gritÃ© systÃ¨me compromise', 'Modification non autorisÃ©e', 'T1565.001', 'wazuh'),
 
--- ============================================================================
--- RÈGLES INTÉGRITÉ DES FICHIERS (550-599)
--- ============================================================================
-(550, 'Fichier modifié', 'Un fichier surveillé a été modifié.', 'moyenne', 13, 'Fichier altéré', 'Mise à jour ou compromission', 'T1565'),
-(551, 'Fichier ajouté', 'Un nouveau fichier a été créé dans un répertoire surveillé.', 'moyenne', 13, 'Nouveau fichier', 'Installation ou malware', 'T1105'),
-(552, 'Fichier supprimé', 'Un fichier surveillé a été supprimé.', 'moyenne', 13, 'Fichier perdu', 'Maintenance ou sabotage', 'T1485'),
-(553, 'Permissions fichier modifiées', 'Les permissions d un fichier surveillé ont changé.', 'moyenne', 13, 'Accès modifié', 'Administration ou backdoor', 'T1222'),
-(554, 'Propriétaire fichier modifié', 'Le propriétaire d un fichier surveillé a changé.', 'moyenne', 13, 'Propriété changée', 'Administration ou compromission', 'T1222'),
-(555, 'Attributs fichier modifiés', 'Les attributs d un fichier surveillé ont été modifiés.', 'faible', 13, 'Métadonnées changées', 'Opération normale ou suspecte', NULL),
-(556, 'Fichier binaire système modifié', 'Un fichier binaire système critique a été modifié.', 'critique', 13, 'Système potentiellement compromis', 'Mise à jour ou rootkit', 'T1554'),
-(557, 'Fichier de configuration modifié', 'Un fichier de configuration important a été modifié.', 'haute', 13, 'Configuration altérée', 'Administration ou backdoor', 'T1565'),
-(558, 'Fichier dans /etc modifié', 'Un fichier dans le répertoire /etc a été modifié.', 'moyenne', 13, 'Configuration système changée', 'Administration normale ou suspecte', 'T1565'),
-(559, 'Fichier crontab modifié', 'Un fichier de tâches planifiées (cron) a été modifié.', 'haute', 13, 'Tâches planifiées changées', 'Maintenance ou persistence malware', 'T1053'),
+-- Rootkits
+(510, 'Rootkit dÃ©tectÃ© - Fichier suspect', 'Fichier rootkit potentiel', 'critique', 3, 'SystÃ¨me potentiellement compromis', 'Infection par rootkit', 'T1014', 'wazuh'),
+(511, 'Rootkit dÃ©tectÃ© - Processus cachÃ©', 'Processus cachÃ© dÃ©tectÃ©', 'critique', 3, 'Processus malveillant actif', 'Rootkit cachant processus', 'T1014', 'wazuh'),
+(512, 'Rootkit dÃ©tectÃ© - Port cachÃ©', 'Port rÃ©seau cachÃ© dÃ©tectÃ©', 'critique', 3, 'Communication malveillante possible', 'Backdoor ou rootkit actif', 'T1014', 'wazuh'),
+(513, 'Trojan dÃ©tectÃ©', 'Cheval de Troie identifiÃ©', 'critique', 3, 'Malware actif sur systÃ¨me', 'Infection par trojan', 'T1204', 'wazuh'),
+(514, 'Signature malware dÃ©tectÃ©e', 'Signature malware connue trouvÃ©e', 'critique', 3, 'Malware connu prÃ©sent', 'Fichier infectÃ© dÃ©tectÃ©', 'T1204', 'wazuh'),
+(515, 'Interface rÃ©seau mode promiscuous', 'Carte rÃ©seau capture tout trafic', 'haute', 3, 'Possible sniffing rÃ©seau', 'Outil capture ou malware', 'T1040', 'wazuh'),
 
--- ============================================================================
--- RÈGLES ROOTKIT (510-549)
--- ============================================================================
-(510, 'Rootkit détecté - fichier suspect', 'Un fichier associé à un rootkit connu a été détecté.', 'critique', 12, 'Système compromis', 'Infection par rootkit', 'T1014'),
-(511, 'Rootkit détecté - processus caché', 'Un processus caché typique des rootkits a été détecté.', 'critique', 12, 'Activité malveillante cachée', 'Rootkit actif', 'T1014'),
-(512, 'Rootkit détecté - port caché', 'Un port réseau caché a été détecté, indiquant un possible rootkit.', 'critique', 12, 'Communication cachée', 'Backdoor active', 'T1014'),
-(513, 'Rootkit détecté - interface promiscuous', 'L interface réseau est en mode promiscuous sans raison valable.', 'haute', 12, 'Capture de trafic possible', 'Sniffer ou rootkit', 'T1040'),
-(514, 'Anomalie dans /dev', 'Un fichier suspect a été détecté dans /dev.', 'haute', 12, 'Possible backdoor', 'Rootkit ou malware', 'T1014'),
-(515, 'Fichier caché suspect', 'Un fichier caché suspect a été découvert.', 'moyenne', 12, 'Fichier malveillant possible', 'Malware ou rootkit', 'T1564'),
-(516, 'Répertoire caché suspect', 'Un répertoire caché suspect a été découvert.', 'moyenne', 12, 'Stockage malveillant possible', 'Malware ou intrusion', 'T1564'),
-(517, 'Binaire système altéré', 'Un binaire système semble avoir été altéré par un rootkit.', 'critique', 12, 'Système compromis', 'Rootkit installé', 'T1014'),
-(518, 'Signature de trojans détectée', 'Une signature connue de trojan a été détectée.', 'critique', 11, 'Malware actif', 'Infection par trojan', 'T1059'),
-(519, 'Processus suspect détecté', 'Un processus avec un comportement suspect a été détecté.', 'haute', 11, 'Activité malveillante possible', 'Malware ou intrusion', 'T1059'),
+-- Services
+(600, 'Service dÃ©marrÃ©', 'Service systÃ¨me dÃ©marrÃ©', 'info', 5, 'Service actif', 'DÃ©marrage normal', 'T1543', 'wazuh'),
+(601, 'Service arrÃªtÃ©', 'Service systÃ¨me arrÃªtÃ©', 'info', 5, 'Service inactif', 'ArrÃªt normal ou problÃ¨me', 'T1489', 'wazuh'),
+(602, 'Service a Ã©chouÃ©', 'Service systÃ¨me en erreur', 'haute', 5, 'Service non fonctionnel', 'Erreur config ou crash', 'T1489', 'wazuh'),
+(603, 'Nouveau service installÃ©', 'Nouveau service ajoutÃ©', 'moyenne', 5, 'Nouveau programme installÃ©', 'Installation lÃ©gitime ou malware', 'T1543', 'wazuh'),
+(604, 'Service systemd rechargÃ©', 'Configuration systemd rechargÃ©e', 'info', 5, 'Configuration mise Ã  jour', 'Changement configuration', 'T1543', 'wazuh'),
 
--- ============================================================================
--- RÈGLES PARE-FEU IPTABLES (4100-4199)
--- ============================================================================
-(4100, 'Paquet rejeté par le pare-feu', 'Le pare-feu a bloqué un paquet entrant.', 'info', 2, 'Aucun - protection active', 'Trafic non autorisé', NULL),
-(4101, 'Tentative de connexion bloquée', 'Une tentative de connexion a été bloquée par le pare-feu.', 'faible', 2, 'Connexion refusée', 'Scan ou erreur', 'T1046'),
-(4102, 'Scan de ports détecté', 'Plusieurs tentatives de connexion sur différents ports ont été détectées.', 'haute', 2, 'Reconnaissance active', 'Scan de ports automatisé', 'T1046'),
-(4103, 'Tentative d accès port SSH bloquée', 'Une tentative de connexion SSH a été bloquée.', 'moyenne', 2, 'Accès SSH refusé', 'IP non autorisée ou attaque', 'T1110'),
-(4104, 'Tentative d accès port dangereux', 'Une connexion vers un port dangereux connu a été bloquée.', 'haute', 2, 'Attaque potentielle bloquée', 'Tentative d exploitation', 'T1046'),
-(4105, 'Flood SYN détecté', 'Un grand nombre de paquets SYN ont été détectés (possible attaque DDoS).', 'critique', 2, 'Déni de service possible', 'Attaque DDoS', 'T1498'),
-(4106, 'Paquet malformé bloqué', 'Un paquet réseau malformé a été bloqué.', 'moyenne', 2, 'Protection active', 'Attaque ou erreur réseau', 'T1190'),
-(4107, 'Règle pare-feu modifiée', 'Une règle du pare-feu a été modifiée.', 'haute', 2, 'Configuration changée', 'Administration ou compromission', 'T1562'),
-(4108, 'Pare-feu désactivé', 'Le pare-feu a été désactivé.', 'critique', 2, 'Protection désactivée', 'Administration ou attaque', 'T1562'),
-(4109, 'Connexion sortante suspecte bloquée', 'Une connexion sortante vers une destination suspecte a été bloquée.', 'haute', 2, 'Exfiltration possible bloquée', 'Malware ou erreur', 'T1048'),
+-- RÃ©seau
+(700, 'Nouvelle connexion rÃ©seau', 'Connexion rÃ©seau Ã©tablie', 'info', 6, 'Communication rÃ©seau active', 'Connexion normale', 'T1071', 'wazuh'),
+(701, 'Connexion rÃ©seau suspecte', 'Connexion destination inhabituelle', 'haute', 6, 'Communication potentiellement malveillante', 'Possible exfiltration ou C2', 'T1071', 'wazuh'),
+(702, 'Scan de ports dÃ©tectÃ©', 'ActivitÃ© scan ports identifiÃ©e', 'haute', 6, 'Reconnaissance rÃ©seau en cours', 'Attaquant cherche vulnÃ©rabilitÃ©s', 'T1046', 'wazuh'),
+(703, 'Tentative connexion bloquÃ©e', 'Pare-feu a bloquÃ© connexion', 'info', 6, 'Connexion non autorisÃ©e refusÃ©e', 'RÃ¨gle pare-feu appliquÃ©e', 'T1071', 'wazuh'),
+(704, 'Trafic DNS suspect', 'RequÃªtes DNS anormales', 'moyenne', 6, 'Possible tunneling DNS ou malware', 'Exfiltration via DNS', 'T1071.004', 'wazuh'),
+(705, 'Connexion vers IP malveillante', 'Connexion vers IP liste noire', 'critique', 6, 'Communication avec infra malveillante', 'SystÃ¨me compromis contactant C2', 'T1071', 'wazuh'),
 
--- ============================================================================
--- RÈGLES SERVEUR WEB APACHE/NGINX (31100-31199)
--- ============================================================================
-(31100, 'Erreur 400 - Requête invalide', 'Le serveur web a reçu une requête mal formée.', 'faible', 4, 'Aucun', 'Client défectueux ou scan', NULL),
-(31101, 'Tentative d injection SQL', 'Une tentative d injection SQL a été détectée dans une requête web.', 'critique', 10, 'Base de données à risque', 'Attaque injection SQL', 'T1190'),
-(31102, 'Tentative de Cross-Site Scripting (XSS)', 'Une tentative d injection XSS a été détectée.', 'haute', 10, 'Utilisateurs à risque', 'Attaque XSS', 'T1059'),
-(31103, 'Tentative de traversée de répertoire', 'Une tentative d accès à des fichiers hors du répertoire web a été détectée.', 'haute', 10, 'Fichiers sensibles à risque', 'Attaque path traversal', 'T1083'),
-(31104, 'Erreur 403 - Accès interdit', 'Un accès à une ressource interdite a été tenté.', 'faible', 4, 'Accès refusé', 'Erreur ou tentative', NULL),
-(31105, 'Erreur 404 répétée', 'De nombreuses erreurs 404 proviennent de la même source.', 'moyenne', 4, 'Scan en cours', 'Scan de vulnérabilités', 'T1595'),
-(31106, 'Erreur 500 - Erreur serveur', 'Le serveur web a rencontré une erreur interne.', 'moyenne', 4, 'Service instable', 'Bug ou attaque', NULL),
-(31107, 'Tentative d accès à fichier sensible', 'Une tentative d accès à un fichier sensible (.htaccess, .env, etc.) a été détectée.', 'haute', 10, 'Informations sensibles à risque', 'Reconnaissance ou attaque', 'T1083'),
-(31108, 'User-Agent suspect détecté', 'Une requête avec un User-Agent malveillant connu a été détectée.', 'moyenne', 4, 'Bot ou scanner', 'Scan automatisé', 'T1595'),
-(31109, 'Tentative d exploitation de vulnérabilité web', 'Une tentative d exploitation d une vulnérabilité web connue a été détectée.', 'critique', 10, 'Serveur web à risque', 'Attaque ciblée', 'T1190'),
-(31110, 'Upload de fichier suspect', 'Un fichier potentiellement malveillant a été uploadé.', 'haute', 10, 'Malware possible sur serveur', 'Tentative d injection', 'T1105'),
-(31111, 'Requête POST anormalement longue', 'Une requête POST de taille anormale a été reçue.', 'moyenne', 4, 'Possible attaque', 'Injection ou DoS', 'T1499'),
-(31112, 'Tentative d accès admin', 'Une tentative d accès à une interface d administration web a été détectée.', 'haute', 10, 'Accès admin à risque', 'Brute force ou scan', 'T1110'),
-(31115, 'Shellshock tentative détectée', 'Une tentative d exploitation de la vulnérabilité Shellshock a été détectée.', 'critique', 10, 'Exécution de code à risque', 'Attaque Shellshock', 'T1190'),
-(31120, 'Scan Nikto détecté', 'Un scan de vulnérabilités Nikto a été détecté.', 'haute', 10, 'Reconnaissance active', 'Scan de sécurité', 'T1595'),
-(31121, 'Scan Nmap détecté', 'Un scan Nmap a été détecté sur le serveur web.', 'moyenne', 10, 'Reconnaissance réseau', 'Scan de ports', 'T1046'),
-(31122, 'Robot malveillant détecté', 'Un robot d indexation malveillant a été détecté.', 'faible', 4, 'Surcharge possible', 'Bot non autorisé', 'T1595'),
-(31130, 'Attaque par déni de service web', 'Un grand nombre de requêtes provenant d une même source a été détecté.', 'critique', 10, 'Service web à risque', 'Attaque DDoS', 'T1498'),
-(31131, 'Slowloris attack détectée', 'Une attaque Slowloris (connexions lentes) a été détectée.', 'haute', 10, 'Épuisement des connexions', 'Attaque DoS', 'T1499'),
+-- Applications web
+(1001, 'Erreur application web', 'Erreur dans logs web', 'info', 7, 'ProblÃ¨me applicatif', 'Bug ou erreur utilisateur', 'T1190', 'wazuh'),
+(1002, 'Erreur HTTP 500', 'Erreur interne serveur web', 'moyenne', 7, 'Serveur web en erreur', 'Bug applicatif ou surcharge', 'T1190', 'wazuh'),
+(1003, 'Erreur HTTP 404 multiple', 'Nombreuses erreurs 404', 'moyenne', 7, 'Possible scan vulnÃ©rabilitÃ©s web', 'Scanner cherchant fichiers sensibles', 'T1595', 'wazuh'),
+(1004, 'Tentative SQL injection', 'Patterns SQL injection dÃ©tectÃ©s', 'critique', 7, 'Tentative injection SQL', 'Attaquant ciblant base donnÃ©es', 'T1190', 'wazuh'),
+(1005, 'Tentative XSS dÃ©tectÃ©e', 'Patterns XSS dans requÃªtes', 'haute', 7, 'Tentative cross-site scripting', 'Attaquant injectant JavaScript', 'T1059.007', 'wazuh'),
+(1100, 'Apache - DÃ©marrage', 'Serveur Apache dÃ©marrÃ©', 'info', 7, 'Serveur web actif', 'DÃ©marrage normal', 'T1190', 'wazuh'),
+(1101, 'Apache - ArrÃªt', 'Serveur Apache arrÃªtÃ©', 'info', 7, 'Serveur web inactif', 'ArrÃªt normal ou crash', 'T1489', 'wazuh'),
+(1102, 'Apache - Erreur configuration', 'Erreur config Apache', 'haute', 7, 'Configuration invalide', 'Erreur syntaxe config', 'T1190', 'wazuh'),
+(1200, 'Nginx - DÃ©marrage', 'Serveur Nginx dÃ©marrÃ©', 'info', 7, 'Serveur web actif', 'DÃ©marrage normal', 'T1190', 'wazuh'),
+(1201, 'Nginx - ArrÃªt', 'Serveur Nginx arrÃªtÃ©', 'info', 7, 'Serveur web inactif', 'ArrÃªt normal ou crash', 'T1489', 'wazuh'),
+(1300, 'MySQL - Connexion rÃ©ussie', 'Connexion MySQL Ã©tablie', 'info', 7, 'AccÃ¨s base donnÃ©es Ã©tabli', 'Connexion normale', 'T1213', 'wazuh'),
+(1301, 'MySQL - Ã‰chec connexion', 'Ã‰chec connexion MySQL', 'moyenne', 7, 'AccÃ¨s base donnÃ©es refusÃ©', 'Identifiants incorrects', 'T1110', 'wazuh'),
+(1302, 'MySQL - RequÃªte suspecte', 'RequÃªte SQL potentiellement dangereuse', 'haute', 7, 'Possible tentative attaque', 'Injection SQL ou requÃªte malformÃ©e', 'T1190', 'wazuh'),
 
--- ============================================================================
--- RÈGLES WINDOWS (18100-18199, 60100-60199)
--- ============================================================================
-(18100, 'Connexion Windows réussie', 'Un utilisateur s est connecté avec succès à un système Windows.', 'info', 6, 'Session ouverte', 'Connexion normale', NULL),
-(18101, 'Échec de connexion Windows', 'Une tentative de connexion Windows a échoué.', 'faible', 6, 'Accès refusé', 'Erreur ou attaque', 'T1110'),
-(18102, 'Compte Windows verrouillé', 'Un compte Windows a été verrouillé après trop d échecs.', 'haute', 6, 'Compte bloqué', 'Attaque brute force', 'T1110'),
-(18103, 'Compte Windows créé', 'Un nouveau compte utilisateur Windows a été créé.', 'moyenne', 6, 'Nouveau compte', 'Administration ou compromission', 'T1136'),
-(18104, 'Compte Windows supprimé', 'Un compte utilisateur Windows a été supprimé.', 'moyenne', 6, 'Compte supprimé', 'Administration normale', NULL),
-(18105, 'Mot de passe Windows changé', 'Le mot de passe d un compte Windows a été modifié.', 'faible', 6, 'Mot de passe changé', 'Action normale ou suspecte', 'T1098'),
-(18106, 'Utilisateur ajouté aux Administrateurs', 'Un utilisateur a été ajouté au groupe Administrateurs.', 'critique', 6, 'Nouveaux privilèges admin', 'Administration ou compromission', 'T1078'),
-(18107, 'Service Windows installé', 'Un nouveau service Windows a été installé.', 'haute', 6, 'Nouveau service', 'Installation ou malware', 'T1543'),
-(18108, 'Tâche planifiée créée', 'Une nouvelle tâche planifiée Windows a été créée.', 'moyenne', 6, 'Tâche automatique', 'Administration ou persistence', 'T1053'),
-(18109, 'Tentative d accès à objet sensible', 'Une tentative d accès à un objet sensible Windows a été détectée.', 'haute', 6, 'Accès non autorisé', 'Élévation de privilèges', 'T1078'),
-(18110, 'Politique d audit modifiée', 'La politique d audit Windows a été modifiée.', 'haute', 6, 'Audit modifié', 'Administration ou dissimulation', 'T1562'),
-(18111, 'Journal d événements effacé', 'Un journal d événements Windows a été effacé.', 'critique', 6, 'Traces supprimées', 'Dissimulation d activité', 'T1070'),
-(60101, 'Attaque brute force Windows détectée', 'Nombreuses tentatives de connexion Windows échouées depuis la même source.', 'critique', 6, 'Risque de compromission', 'Attaque automatisée', 'T1110'),
-(60102, 'Pass-the-hash détecté', 'Une tentative d authentification pass-the-hash a été détectée.', 'critique', 6, 'Credentials compromis', 'Attaque latérale', 'T1550'),
-(60103, 'PowerShell suspect exécuté', 'Une commande PowerShell suspecte a été exécutée.', 'haute', 6, 'Exécution de code', 'Malware ou attaque', 'T1059'),
-(60104, 'Exécution depuis emplacement suspect', 'Un programme a été exécuté depuis un emplacement inhabituel.', 'haute', 6, 'Malware possible', 'Téléchargement malveillant', 'T1204'),
+-- SystÃ¨me
+(530, 'DÃ©marrage systÃ¨me', 'SystÃ¨me a dÃ©marrÃ©', 'info', 8, 'SystÃ¨me opÃ©rationnel', 'RedÃ©marrage normal', 'T1078', 'wazuh'),
+(531, 'ArrÃªt systÃ¨me', 'SystÃ¨me s arrÃªte', 'info', 8, 'SystÃ¨me en arrÃªt', 'ArrÃªt planifiÃ© ou problÃ¨me', 'T1529', 'wazuh'),
+(532, 'Nouvel utilisateur crÃ©Ã©', 'Compte utilisateur crÃ©Ã©', 'moyenne', 8, 'Nouveau compte systÃ¨me', 'CrÃ©ation lÃ©gitime ou suspecte', 'T1136', 'wazuh'),
+(533, 'Utilisateur supprimÃ©', 'Compte utilisateur supprimÃ©', 'moyenne', 8, 'Compte retirÃ© systÃ¨me', 'Suppression administrative', 'T1531', 'wazuh'),
+(534, 'Groupe crÃ©Ã©', 'Nouveau groupe crÃ©Ã©', 'info', 8, 'Nouveau groupe systÃ¨me', 'Organisation droits', 'T1136', 'wazuh'),
+(535, 'Utilisateur ajoutÃ© Ã  groupe', 'Utilisateur ajoutÃ© Ã  un groupe', 'info', 8, 'Droits utilisateur modifiÃ©s', 'Changement permissions', 'T1078', 'wazuh'),
+(536, 'Mot de passe changÃ©', 'Mot de passe utilisateur modifiÃ©', 'info', 8, 'Credentials mis Ã  jour', 'Changement normal ou forcÃ©', 'T1078', 'wazuh'),
+(537, 'Cron job ajoutÃ©', 'TÃ¢che planifiÃ©e ajoutÃ©e', 'moyenne', 8, 'Nouvelle tÃ¢che automatique', 'Automatisation ou persistance malware', 'T1053', 'wazuh'),
+(538, 'Cron job modifiÃ©', 'TÃ¢che planifiÃ©e modifiÃ©e', 'moyenne', 8, 'TÃ¢che automatique changÃ©e', 'Maintenance ou modification suspecte', 'T1053', 'wazuh'),
+(539, 'Espace disque faible', 'Espace disque presque plein', 'haute', 8, 'Risque dysfonctionnement', 'Disque plein bientÃ´t', 'T1485', 'wazuh'),
+(540, 'Erreur kernel', 'Erreur kernel dÃ©tectÃ©e', 'haute', 8, 'ProblÃ¨me systÃ¨me grave', 'Bug kernel ou matÃ©riel dÃ©faillant', 'T1014', 'wazuh'),
+(541, 'Module kernel chargÃ©', 'Module kernel chargÃ©', 'moyenne', 8, 'Nouveau module noyau', 'Driver lÃ©gitime ou rootkit', 'T1547', 'wazuh'),
+(542, 'OOM Killer activÃ©', 'Processus tuÃ© par manque mÃ©moire', 'haute', 8, 'MÃ©moire insuffisante', 'Fuite mÃ©moire ou surcharge', 'T1499', 'wazuh'),
 
--- ============================================================================
--- RÈGLES SYSTÈME LINUX (5100-5199)
--- ============================================================================
-(5100, 'Redémarrage système détecté', 'Le système a été redémarré.', 'info', 1, 'Service interrompu', 'Maintenance ou crash', NULL),
-(5101, 'Arrêt système détecté', 'Le système a été arrêté.', 'info', 1, 'Service arrêté', 'Maintenance normale', NULL),
-(5102, 'Kernel panic', 'Le système a subi un kernel panic.', 'critique', 1, 'Système crashé', 'Bug ou attaque', NULL),
-(5103, 'Espace disque critique', 'L espace disque disponible est critique (moins de 5%).', 'haute', 1, 'Risque de panne', 'Logs ou données excessives', NULL),
-(5104, 'Mémoire insuffisante', 'Le système manque de mémoire RAM.', 'haute', 1, 'Performance dégradée', 'Charge excessive ou fuite mémoire', NULL),
-(5105, 'OOM Killer activé', 'Le système a dû tuer des processus par manque de mémoire.', 'critique', 1, 'Processus tués', 'Charge excessive', NULL),
-(5106, 'Service critique arrêté', 'Un service système critique s est arrêté.', 'haute', 1, 'Service indisponible', 'Crash ou arrêt manuel', NULL),
-(5107, 'Erreur matérielle détectée', 'Une erreur matérielle a été détectée dans les logs.', 'haute', 1, 'Risque de panne matérielle', 'Défaillance hardware', NULL),
-(5108, 'Nouveau kernel chargé', 'Un nouveau noyau Linux a été chargé.', 'info', 1, 'Kernel mis à jour', 'Mise à jour système', NULL),
-(5109, 'Module kernel chargé', 'Un module kernel a été chargé.', 'faible', 1, 'Nouveau module actif', 'Driver ou rootkit', 'T1547'),
-(5110, 'Module kernel suspect chargé', 'Un module kernel suspect ou non signé a été chargé.', 'haute', 1, 'Possible rootkit', 'Malware kernel', 'T1014'),
-(5111, 'Modification de /etc/passwd', 'Le fichier des utilisateurs a été modifié.', 'haute', 1, 'Comptes modifiés', 'Administration ou backdoor', 'T1136'),
-(5112, 'Modification de /etc/shadow', 'Le fichier des mots de passe a été modifié.', 'haute', 1, 'Mots de passe changés', 'Administration ou attaque', 'T1098'),
-(5113, 'Modification de /etc/sudoers', 'Le fichier sudoers a été modifié.', 'critique', 1, 'Privilèges modifiés', 'Administration ou élévation', 'T1548'),
-(5114, 'Ajout dans /etc/cron', 'Une nouvelle tâche cron a été ajoutée.', 'moyenne', 1, 'Tâche planifiée', 'Maintenance ou persistence', 'T1053'),
-(5115, 'Modification de /etc/hosts', 'Le fichier hosts a été modifié.', 'moyenne', 1, 'Résolution DNS altérée', 'Configuration ou détournement', 'T1565'),
+-- Audit
+(800, 'Audit - Commande exÃ©cutÃ©e', 'Commande enregistrÃ©e par auditd', 'info', 9, 'ActivitÃ© utilisateur tracÃ©e', 'Commande normale ou suspecte', 'T1059', 'wazuh'),
+(801, 'Audit - Fichier accÃ©dÃ©', 'AccÃ¨s fichier surveillÃ©', 'info', 9, 'Lecture fichier sensible', 'AccÃ¨s lÃ©gitime ou non', 'T1005', 'wazuh'),
+(802, 'Audit - Changement configuration', 'Configuration systÃ¨me modifiÃ©e', 'moyenne', 9, 'ParamÃ¨tres systÃ¨me changÃ©s', 'Administration ou compromission', 'T1562', 'wazuh'),
+(803, 'Audit - Ã‰lÃ©vation privilÃ¨ges', 'Tentative Ã©lÃ©vation privilÃ¨ges', 'haute', 9, 'Droits Ã©levÃ©s demandÃ©s', 'Action administrative ou attaque', 'T1548', 'wazuh'),
 
--- ============================================================================
--- RÈGLES RÉSEAU (1100-1199)
--- ============================================================================
-(1100, 'Nouvelle connexion réseau établie', 'Une nouvelle connexion réseau sortante a été établie.', 'info', 15, 'Connexion active', 'Communication normale', NULL),
-(1101, 'Connexion vers IP malveillante', 'Une connexion vers une adresse IP connue comme malveillante a été détectée.', 'critique', 15, 'Communication avec attaquant', 'Malware ou compromission', 'T1071'),
-(1102, 'Connexion vers pays suspect', 'Une connexion vers un pays à haut risque a été établie.', 'moyenne', 15, 'Trafic suspect', 'Normal ou exfiltration', 'T1048'),
-(1103, 'Volume de données sortantes anormal', 'Un volume anormalement élevé de données sortantes a été détecté.', 'haute', 15, 'Possible exfiltration', 'Sauvegarde ou vol de données', 'T1048'),
-(1104, 'Connexion DNS suspecte', 'Une requête DNS vers un domaine suspect a été détectée.', 'haute', 15, 'Communication cachée possible', 'DNS tunneling ou malware', 'T1071'),
-(1105, 'Tunneling détecté', 'Un tunnel réseau suspect (VPN, SSH, DNS) a été détecté.', 'haute', 15, 'Communication cachée', 'Contournement ou exfiltration', 'T1572'),
-(1106, 'ARP spoofing détecté', 'Une attaque ARP spoofing a été détectée sur le réseau.', 'critique', 15, 'Interception de trafic', 'Attaque man-in-the-middle', 'T1557'),
-(1107, 'Nouvelle interface réseau', 'Une nouvelle interface réseau a été activée.', 'moyenne', 15, 'Nouvelle connectivité', 'Configuration ou rogue device', NULL),
-(1108, 'Mode promiscuous activé', 'Une interface réseau est passée en mode promiscuous.', 'haute', 15, 'Capture de trafic', 'Monitoring ou sniffing', 'T1040'),
-(1109, 'Port inhabituel utilisé', 'Une connexion utilise un port non standard pour un protocole.', 'moyenne', 15, 'Communication suspecte', 'Contournement de filtrage', 'T1571'),
-(1110, 'Connexion IRC détectée', 'Une connexion IRC a été détectée (souvent utilisé par botnets).', 'haute', 15, 'Possible botnet', 'Malware ou usage légitime', 'T1071'),
-(1111, 'Connexion Tor détectée', 'Une connexion au réseau Tor a été détectée.', 'haute', 15, 'Anonymisation active', 'Usage légitime ou malveillant', 'T1090'),
-(1112, 'Beacon C2 possible', 'Un schéma de communication régulier suggère un beacon de commande et contrôle.', 'critique', 15, 'Communication avec C2', 'Malware actif', 'T1071'),
+-- Pare-feu
+(4100, 'Pare-feu - Paquet acceptÃ©', 'Paquet acceptÃ© par pare-feu', 'info', 10, 'Trafic autorisÃ©', 'Communication normale', 'T1071', 'wazuh'),
+(4101, 'Pare-feu - Paquet bloquÃ©', 'Paquet bloquÃ© par pare-feu', 'info', 10, 'Trafic non autorisÃ© refusÃ©', 'RÃ¨gle filtrage appliquÃ©e', 'T1071', 'wazuh'),
+(4102, 'Pare-feu - Scan dÃ©tectÃ©', 'Pare-feu a dÃ©tectÃ© un scan', 'haute', 10, 'Reconnaissance en cours', 'Attaquant cherchant ports ouverts', 'T1046', 'wazuh'),
+(4103, 'Pare-feu - RÃ¨gle ajoutÃ©e', 'Nouvelle rÃ¨gle pare-feu ajoutÃ©e', 'moyenne', 10, 'Configuration pare-feu modifiÃ©e', 'Ajout rÃ¨gle', 'T1562.004', 'wazuh'),
+(4104, 'Pare-feu - RÃ¨gle supprimÃ©e', 'RÃ¨gle pare-feu supprimÃ©e', 'haute', 10, 'Protection potentiellement rÃ©duite', 'Suppression rÃ¨gle', 'T1562.004', 'wazuh'),
 
--- ============================================================================
--- RÈGLES SNORT/IDS (20000-20099)
--- ============================================================================
-(20000, 'Alerte Snort générique', 'Snort a généré une alerte de sécurité.', 'moyenne', 3, 'Activité suspecte détectée', 'Trafic malveillant possible', NULL),
-(20001, 'Scan de ports détecté par Snort', 'Snort a détecté un scan de ports sur le réseau.', 'haute', 3, 'Reconnaissance active', 'Attaque en préparation', 'T1046'),
-(20002, 'Exploit détecté par Snort', 'Snort a détecté une tentative d exploitation.', 'critique', 3, 'Attaque en cours', 'Exploitation de vulnérabilité', 'T1190'),
-(20003, 'Malware détecté par Snort', 'Snort a détecté du trafic de malware connu.', 'critique', 3, 'Malware actif', 'Infection ou communication C2', 'T1071'),
-(20004, 'Attaque DoS détectée par Snort', 'Snort a détecté une attaque par déni de service.', 'critique', 3, 'Service à risque', 'Attaque DDoS', 'T1498'),
-(20005, 'Tentative d intrusion détectée', 'Snort a détecté une tentative d intrusion.', 'haute', 3, 'Sécurité à risque', 'Attaque ciblée', 'T1190'),
-(20006, 'Trafic suspect détecté par Snort', 'Snort a détecté du trafic réseau suspect.', 'moyenne', 3, 'Activité anormale', 'Reconnaissance ou attaque', NULL),
-(20007, 'Communication C2 détectée', 'Snort a détecté une communication Command & Control.', 'critique', 3, 'Machine compromise', 'Malware actif', 'T1071'),
-(20008, 'Exfiltration de données détectée', 'Snort a détecté une possible exfiltration de données.', 'critique', 3, 'Vol de données', 'Attaque réussie', 'T1048'),
-(20009, 'Protocole anormal détecté', 'Snort a détecté l utilisation anormale d un protocole.', 'moyenne', 3, 'Communication suspecte', 'Tunneling ou évasion', 'T1571'),
-(20010, 'Signature de ver détectée', 'Snort a détecté la signature d un ver informatique.', 'critique', 3, 'Propagation de malware', 'Infection par ver', 'T1210'),
+-- IDS gÃ©nÃ©riques
+(86001, 'IDS - Alerte Snort gÃ©nÃ©rique', 'Alerte Snort gÃ©nÃ©rÃ©e', 'moyenne', 11, 'ActivitÃ© suspecte dÃ©tectÃ©e par Snort', 'Signature IDS correspondante', 'T1071', 'wazuh'),
+(86002, 'IDS - Plusieurs alertes Snort', 'Multiples alertes Snort', 'haute', 11, 'Attaque probable en cours', 'Nombreuses signatures dÃ©clenchÃ©es', 'T1071', 'wazuh'),
 
--- ============================================================================
--- RÈGLES WAZUH INTERNES (500-509, 1000-1099)
--- ============================================================================
-(500, 'Agent Wazuh connecté', 'Un agent Wazuh s est connecté au manager.', 'info', 7, 'Surveillance active', 'Démarrage de l agent', NULL),
-(501, 'Agent Wazuh déconnecté', 'Un agent Wazuh s est déconnecté du manager.', 'moyenne', 7, 'Surveillance interrompue', 'Arrêt ou problème réseau', NULL),
-(502, 'Agent Wazuh ne répond plus', 'Un agent Wazuh ne répond plus depuis plus de 10 minutes.', 'haute', 7, 'Perte de surveillance', 'Panne ou compromission', NULL),
-(503, 'Nouvel agent Wazuh enregistré', 'Un nouvel agent Wazuh a été enregistré.', 'info', 7, 'Nouveau système surveillé', 'Déploiement', NULL),
-(504, 'Configuration Wazuh modifiée', 'La configuration de Wazuh a été modifiée.', 'moyenne', 7, 'Paramètres changés', 'Administration', NULL),
-(505, 'Règle Wazuh mise à jour', 'Les règles de détection Wazuh ont été mises à jour.', 'info', 7, 'Détection améliorée', 'Mise à jour', NULL),
-(506, 'Erreur Wazuh', 'Wazuh a rencontré une erreur interne.', 'moyenne', 7, 'Fonctionnement dégradé', 'Bug ou configuration', NULL),
-(507, 'Wazuh manager redémarré', 'Le manager Wazuh a été redémarré.', 'info', 7, 'Service redémarré', 'Maintenance', NULL),
-(1002, 'Checksum de l agent modifié', 'Le checksum de l agent Wazuh a changé, possible compromission.', 'haute', 7, 'Agent potentiellement altéré', 'Mise à jour ou compromission', 'T1565'),
-(1003, 'Agent Wazuh arrêté de force', 'L agent Wazuh a été arrêté de manière inattendue.', 'haute', 7, 'Surveillance arrêtée', 'Crash ou action malveillante', 'T1562'),
+-- Compliance
+(9001, 'PCI-DSS - Violation dÃ©tectÃ©e', 'Non-conformitÃ© PCI-DSS', 'haute', 14, 'ConformitÃ© PCI-DSS compromise', 'Violation rÃ¨gles paiement', 'T1078', 'wazuh'),
+(9002, 'GDPR - AccÃ¨s donnÃ©es personnelles', 'AccÃ¨s donnÃ©es personnelles', 'moyenne', 14, 'DonnÃ©es personnelles consultÃ©es', 'AccÃ¨s lÃ©gitime ou non', 'T1005', 'wazuh'),
+(9003, 'HIPAA - Violation potentielle', 'Possible violation HIPAA', 'haute', 14, 'DonnÃ©es mÃ©dicales exposÃ©es', 'AccÃ¨s non autorisÃ© donnÃ©es santÃ©', 'T1005', 'wazuh'),
 
--- ============================================================================
--- RÈGLES VULNÉRABILITÉS (23500-23599)
--- ============================================================================
-(23500, 'Vulnérabilité critique détectée', 'Une vulnérabilité de sécurité critique a été détectée sur le système.', 'critique', 14, 'Système vulnérable', 'Logiciel non mis à jour', 'T1190'),
-(23501, 'Vulnérabilité haute détectée', 'Une vulnérabilité de sécurité haute a été détectée.', 'haute', 14, 'Système à risque', 'Logiciel non mis à jour', 'T1190'),
-(23502, 'Vulnérabilité moyenne détectée', 'Une vulnérabilité de sécurité moyenne a été détectée.', 'moyenne', 14, 'Risque modéré', 'Logiciel non mis à jour', NULL),
-(23503, 'CVE connue détectée', 'Une CVE (vulnérabilité référencée) connue a été détectée.', 'haute', 14, 'Exploit public possible', 'Logiciel vulnérable', 'T1190'),
-(23504, 'Mise à jour de sécurité disponible', 'Une mise à jour de sécurité est disponible pour un paquet.', 'moyenne', 14, 'Mise à jour requise', 'Nouveau patch', NULL),
-(23505, 'Paquet obsolète détecté', 'Un paquet logiciel obsolète et potentiellement vulnérable est installé.', 'moyenne', 14, 'Risque de sécurité', 'Maintenance insuffisante', NULL),
+-- Politique
+(5100, 'Violation politique sÃ©curitÃ©', 'RÃ¨gle sÃ©curitÃ© violÃ©e', 'haute', 4, 'Non-conformitÃ© dÃ©tectÃ©e', 'Action non autorisÃ©e', 'T1078', 'wazuh'),
+(5101, 'AccÃ¨s hors heures autorisÃ©es', 'Connexion hors heures travail', 'moyenne', 4, 'AccÃ¨s heure inhabituelle', 'Travail tardif ou accÃ¨s non autorisÃ©', 'T1078', 'wazuh'),
+(5102, 'Tentative accÃ¨s ressource interdite', 'AccÃ¨s ressource non autorisÃ©e', 'haute', 4, 'Tentative violation politique', 'AccÃ¨s donnÃ©es restreintes', 'T1078', 'wazuh'),
 
--- ============================================================================
--- RÈGLES VIOLATION DE POLITIQUE (80700-80799)
--- ============================================================================
-(80700, 'Violation de politique de sécurité', 'Une règle de politique de sécurité a été violée.', 'moyenne', 16, 'Non-conformité', 'Erreur ou contournement', NULL),
-(80701, 'Mot de passe faible détecté', 'Un mot de passe ne respectant pas la politique a été détecté.', 'moyenne', 16, 'Sécurité affaiblie', 'Utilisateur non conforme', 'T1078'),
-(80702, 'Logiciel non autorisé installé', 'Un logiciel non autorisé a été installé sur le système.', 'haute', 16, 'Violation de politique', 'Installation non approuvée', 'T1072'),
-(80703, 'Port non autorisé ouvert', 'Un port non autorisé par la politique est ouvert.', 'haute', 16, 'Surface d attaque étendue', 'Configuration non conforme', NULL),
-(80704, 'Accès hors heures autorisées', 'Un accès a eu lieu en dehors des heures autorisées.', 'moyenne', 16, 'Accès suspect', 'Travail tardif ou compromission', 'T1078'),
-(80705, 'Téléchargement de fichier suspect', 'Un fichier potentiellement dangereux a été téléchargé.', 'haute', 16, 'Malware possible', 'Téléchargement à risque', 'T1105'),
-(80706, 'Utilisation de protocole non sécurisé', 'Un protocole non sécurisé (FTP, Telnet, HTTP) est utilisé.', 'moyenne', 16, 'Données à risque', 'Configuration obsolète', NULL),
-(80707, 'Tentative de contournement de proxy', 'Une tentative de contournement du proxy a été détectée.', 'haute', 16, 'Évasion des contrôles', 'Contournement intentionnel', 'T1090'),
-(80708, 'Partage de fichiers non autorisé', 'Un partage de fichiers non autorisé a été détecté.', 'moyenne', 16, 'Données exposées', 'Configuration non conforme', 'T1048'),
+-- RÃ¨gle par dÃ©faut
+(99999, 'Alerte non identifiÃ©e', 'Alerte pas encore traduite', 'moyenne', 15, 'Impact inconnu - analyse requise', 'Origine inconnue', NULL, 'wazuh');
 
--- ============================================================================
--- RÈGLES SUPPLÉMENTAIRES AUTHENTIFICATION (2500-2599)
--- ============================================================================
-(2501, 'Connexion réussie après plusieurs échecs', 'Un utilisateur a réussi à se connecter après plusieurs tentatives échouées.', 'moyenne', 8, 'Accès obtenu après difficultés', 'Oubli de mot de passe ou attaque réussie', 'T1110'),
-(2502, 'Connexion depuis plusieurs pays', 'Un même compte s est connecté depuis plusieurs pays en peu de temps.', 'critique', 8, 'Compte potentiellement compromis', 'Credentials volés', 'T1078'),
-(2503, 'Connexion à une heure inhabituelle', 'Une connexion a eu lieu à une heure anormale pour cet utilisateur.', 'moyenne', 8, 'Activité suspecte', 'Travail tardif ou compromission', 'T1078'),
-(2504, 'Première connexion d un utilisateur', 'Un utilisateur se connecte pour la première fois.', 'info', 8, 'Nouveau compte actif', 'Normal ou compte créé par attaquant', NULL),
-(2505, 'Connexion avec privilèges élevés', 'Une connexion avec des privilèges administrateur a été effectuée.', 'moyenne', 8, 'Session admin active', 'Administration ou abus', 'T1078'),
+-- =============================================================================
+-- RÃˆGLES SNORT (300 rÃ¨gles) - CatÃ©gories 16-25
+-- =============================================================================
 
--- ============================================================================
--- RÈGLES SUPPLÉMENTAIRES MALWARE (3000-3099)
--- ============================================================================
-(3001, 'Signature de ransomware détectée', 'Une signature de ransomware connu a été détectée.', 'critique', 11, 'Chiffrement des données imminent', 'Infection par ransomware', 'T1486'),
-(3002, 'Comportement de cryptominer détecté', 'Une activité de minage de cryptomonnaie a été détectée.', 'haute', 11, 'Ressources système détournées', 'Cryptominer installé', 'T1496'),
-(3003, 'Connexion à domaine malveillant', 'Une connexion vers un domaine connu comme malveillant a été détectée.', 'critique', 11, 'Communication avec C2', 'Malware actif', 'T1071'),
-(3004, 'Téléchargement de fichier exécutable suspect', 'Un fichier exécutable a été téléchargé depuis une source suspecte.', 'haute', 11, 'Possible infection', 'Drive-by download', 'T1105'),
-(3005, 'Script PowerShell encodé détecté', 'Un script PowerShell encodé en base64 a été exécuté.', 'haute', 11, 'Exécution de code obfusqué', 'Attaque ou malware', 'T1059'),
-(3006, 'Modification du registre suspecte', 'Une modification suspecte du registre Windows a été détectée.', 'haute', 11, 'Persistence possible', 'Malware ou configuration', 'T1547'),
-(3007, 'Processus injectant du code', 'Un processus tente d injecter du code dans un autre processus.', 'critique', 11, 'Technique d évasion', 'Malware avancé', 'T1055'),
-(3008, 'Désactivation de l antivirus', 'Une tentative de désactivation de l antivirus a été détectée.', 'critique', 11, 'Protection désactivée', 'Malware ou attaquant', 'T1562'),
+-- SCAN & RECONNAISSANCE (40 rÃ¨gles) - CatÃ©gorie 16
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87001, 'Scan de ports TCP dÃ©tectÃ©', 'Scan de ports TCP identifiÃ©', 'haute', 16, 'Attaquant cartographie ports ouverts', 'Outil Nmap utilisÃ©', 'T1046', 'snort'),
+(87002, 'Scan de ports UDP dÃ©tectÃ©', 'Scan de ports UDP identifiÃ©', 'haute', 16, 'Recherche services UDP vulnÃ©rables', 'Scanner ports UDP actif', 'T1046', 'snort'),
+(87003, 'Scan SYN furtif dÃ©tectÃ©', 'Scan TCP SYN half-open', 'haute', 16, 'Scan discret Ã©vitant dÃ©tection', 'Nmap SYN scan', 'T1046', 'snort'),
+(87004, 'Scan FIN dÃ©tectÃ©', 'Scan TCP FIN anormal', 'haute', 16, 'Ã‰vasion pour contourner pare-feux', 'Scan FIN ports filtrÃ©s', 'T1046', 'snort'),
+(87005, 'Scan NULL dÃ©tectÃ©', 'Scan TCP sans flags', 'haute', 16, 'Technique scan Ã©vasif', 'Paquets TCP sans flag', 'T1046', 'snort'),
+(87006, 'Scan XMAS dÃ©tectÃ©', 'Scan TCP XMAS tous flags', 'haute', 16, 'Scan tous flags TCP activÃ©s', 'Fingerprinting OS', 'T1046', 'snort'),
+(87007, 'Scan ACK dÃ©tectÃ©', 'Scan TCP ACK dÃ©tectÃ©', 'moyenne', 16, 'Cartographie rÃ¨gles pare-feu', 'ID ports filtrÃ©s vs non-filtrÃ©s', 'T1046', 'snort'),
+(87008, 'Tentative fingerprinting OS', 'ID systÃ¨me exploitation', 'moyenne', 16, 'Attaquant identifie OS pour cibler exploits', 'Nmap OS detection', 'T1046', 'snort'),
+(87009, 'Scan Nmap dÃ©tectÃ©', 'Signature Nmap identifiÃ©e', 'haute', 16, 'Outil reconnaissance Nmap utilisÃ©', 'Scan automatisÃ©', 'T1046', 'snort'),
+(87010, 'Scan massif dÃ©tectÃ©', 'Scan nombreux ports rapidement', 'critique', 16, 'Reconnaissance agressive rÃ©seau', 'Scan rapide type masscan', 'T1046', 'snort'),
+(87011, 'Scan vulnÃ©rabilitÃ©s dÃ©tectÃ©', 'Scanner vulnÃ©rabilitÃ©s identifiÃ©', 'haute', 16, 'Recherche automatisÃ©e failles', 'Nessus, OpenVAS ou Ã©quivalent', 'T1595', 'snort'),
+(87012, 'Ping sweep dÃ©tectÃ©', 'Balayage ICMP rÃ©seau', 'moyenne', 16, 'DÃ©couverte hÃ´tes actifs', 'Reconnaissance prÃ©liminaire', 'T1046', 'snort'),
+(87013, 'Traceroute dÃ©tectÃ©', 'Tentative traÃ§age route', 'faible', 16, 'Cartographie topologie rÃ©seau', 'Reconnaissance infrastructure', 'T1046', 'snort'),
+(87014, 'Scan ARP dÃ©tectÃ©', 'Balayage ARP rÃ©seau local', 'moyenne', 16, 'DÃ©couverte machines LAN', 'arp-scan ou similaire', 'T1046', 'snort'),
+(87015, 'Banner grabbing dÃ©tectÃ©', 'RÃ©cupÃ©ration banniÃ¨res', 'moyenne', 16, 'ID versions services', 'Reconnaissance logiciels', 'T1046', 'snort'),
+(87016, 'Scan SMB dÃ©tectÃ©', 'Ã‰numÃ©ration partages SMB', 'haute', 16, 'Recherche partages Windows', 'enum4linux ou smbclient', 'T1135', 'snort'),
+(87017, 'Ã‰numÃ©ration SNMP dÃ©tectÃ©e', 'Scan informations SNMP', 'haute', 16, 'Extraction infos systÃ¨me via SNMP', 'Community strings testÃ©es', 'T1046', 'snort'),
+(87018, 'Scan LDAP dÃ©tectÃ©', 'Ã‰numÃ©ration annuaire LDAP', 'haute', 16, 'Extraction infos Active Directory', 'Reconnaissance AD', 'T1087', 'snort'),
+(87019, 'Scan NetBIOS dÃ©tectÃ©', 'Ã‰numÃ©ration NetBIOS rÃ©seau', 'moyenne', 16, 'DÃ©couverte noms machines Windows', 'nbtscan ou Ã©quivalent', 'T1046', 'snort'),
+(87020, 'Scan RPC dÃ©tectÃ©', 'Ã‰numÃ©ration services RPC', 'moyenne', 16, 'ID services RPC disponibles', 'rpcinfo ou rpcclient', 'T1046', 'snort'),
+(87021, 'Scan ports web dÃ©tectÃ©', 'Scan ciblant HTTP/HTTPS', 'moyenne', 16, 'Recherche serveurs web', 'Reconnaissance web', 'T1046', 'snort'),
+(87022, 'Scan base donnÃ©es dÃ©tectÃ©', 'Scan ports bases donnÃ©es', 'haute', 16, 'Recherche MySQL PostgreSQL MSSQL', 'Ciblage donnÃ©es', 'T1046', 'snort'),
+(87023, 'Ã‰numÃ©ration DNS dÃ©tectÃ©e', 'RequÃªtes DNS reconnaissance', 'moyenne', 16, 'Transfert zone ou Ã©numÃ©ration', 'dig dnsenum fierce', 'T1046', 'snort'),
+(87024, 'Scan SSH dÃ©tectÃ©', 'Scan ciblant port SSH', 'moyenne', 16, 'Recherche serveurs SSH', 'PrÃ©paration attaque SSH', 'T1046', 'snort'),
+(87025, 'Scan Telnet dÃ©tectÃ©', 'Scan port Telnet', 'haute', 16, 'Recherche services Telnet non sÃ©curisÃ©s', 'Protocole non chiffrÃ© ciblÃ©', 'T1046', 'snort'),
+(87026, 'Scan VNC dÃ©tectÃ©', 'Scan ports VNC', 'haute', 16, 'Recherche bureaux distants', 'Ciblage accÃ¨s graphique', 'T1046', 'snort'),
+(87027, 'Scan RDP dÃ©tectÃ©', 'Scan port Remote Desktop', 'haute', 16, 'Recherche serveurs Windows RDP', 'PrÃ©paration attaque RDP', 'T1046', 'snort'),
+(87028, 'Scan FTP dÃ©tectÃ©', 'Scan port FTP', 'moyenne', 16, 'Recherche serveurs FTP', 'Ciblage transfert fichiers', 'T1046', 'snort'),
+(87029, 'Scan service mail dÃ©tectÃ©', 'Scan ports SMTP/POP/IMAP', 'moyenne', 16, 'Recherche serveurs messagerie', 'Ciblage infra email', 'T1046', 'snort'),
+(87030, 'Scan IPv6 dÃ©tectÃ©', 'Reconnaissance rÃ©seau IPv6', 'moyenne', 16, 'Scan adresses IPv6', 'Reconnaissance dual-stack', 'T1046', 'snort'),
+(87031, 'Fragmentation scan dÃ©tectÃ©', 'Scan paquets fragmentÃ©s', 'haute', 16, 'Technique Ã©vasion IDS', 'Fragmentation Ã©viter dÃ©tection', 'T1046', 'snort'),
+(87032, 'Idle scan dÃ©tectÃ©', 'Scan utilisant hÃ´te zombie', 'critique', 16, 'Technique scan trÃ¨s furtif', 'Utilisation tiers pour scanner', 'T1046', 'snort'),
+(87033, 'Decoy scan dÃ©tectÃ©', 'Scan adresses sources multiples', 'haute', 16, 'Tentative masquer vraie source', 'Nmap decoy scan', 'T1046', 'snort'),
+(87034, 'Scan TTL anormal', 'Paquets TTL suspect', 'moyenne', 16, 'Technique fingerprinting', 'Analyse comportement rÃ©seau', 'T1046', 'snort'),
+(87035, 'Scan ports privilÃ©giÃ©s', 'Scan ports 1-1024', 'moyenne', 16, 'Recherche services systÃ¨me', 'Scan ports rÃ©servÃ©s', 'T1046', 'snort'),
+(87036, 'Scan ports hauts', 'Scan ports supÃ©rieurs 1024', 'faible', 16, 'Recherche services applicatifs', 'Scan ports non privilÃ©giÃ©s', 'T1046', 'snort'),
+(87037, 'Scan horizontal dÃ©tectÃ©', 'MÃªme port plusieurs hÃ´tes', 'haute', 16, 'Recherche service spÃ©cifique rÃ©seau', 'Ciblage vulnÃ©rabilitÃ© connue', 'T1046', 'snort'),
+(87038, 'Scan vertical dÃ©tectÃ©', 'Plusieurs ports un hÃ´te', 'moyenne', 16, 'Ã‰numÃ©ration complÃ¨te machine', 'Analyse approfondie serveur', 'T1046', 'snort'),
+(87039, 'Service version scan dÃ©tectÃ©', 'ID versions services', 'moyenne', 16, 'Recherche versions vulnÃ©rables', 'Nmap service detection', 'T1046', 'snort'),
+(87040, 'Script scan Nmap dÃ©tectÃ©', 'ExÃ©cution scripts NSE Nmap', 'haute', 16, 'Scan avancÃ© scripts Nmap', 'DÃ©tection vulnÃ©rabilitÃ©s automatisÃ©e', 'T1595', 'snort');
 
--- ============================================================================
--- RÈGLES SUPPLÉMENTAIRES RÉSEAU AVANCÉES (1200-1299)
--- ============================================================================
-(1200, 'Scan ICMP détecté', 'Un scan ping (ICMP) a été détecté sur le réseau.', 'faible', 15, 'Reconnaissance réseau', 'Scan de découverte', 'T1046'),
-(1201, 'Tentative de DNS zone transfer', 'Une tentative de transfert de zone DNS a été détectée.', 'haute', 15, 'Reconnaissance DNS', 'Collecte d informations', 'T1590'),
-(1202, 'Requête DNS TXT suspecte', 'Une requête DNS TXT inhabituelle a été détectée (possible exfiltration).', 'haute', 15, 'Exfiltration par DNS', 'DNS tunneling', 'T1071'),
-(1203, 'Connexion SMTP non autorisée', 'Une connexion SMTP sortante non autorisée a été détectée.', 'haute', 15, 'Envoi de spam possible', 'Serveur compromis', 'T1071'),
-(1204, 'Trafic HTTPS vers IP directe', 'Du trafic HTTPS est envoyé vers une IP au lieu d un domaine.', 'moyenne', 15, 'Communication suspecte', 'C2 ou configuration', 'T1071'),
-(1205, 'Fragmentation IP suspecte', 'Des paquets IP fragmentés de manière suspecte ont été détectés.', 'moyenne', 15, 'Évasion possible', 'Attaque ou erreur', 'T1027'),
-(1206, 'Broadcast excessif', 'Un volume anormal de trafic broadcast a été détecté.', 'moyenne', 15, 'Possible attaque réseau', 'Misconfiguration ou attaque', NULL),
-(1207, 'Connexion VPN non autorisée', 'Une connexion VPN non autorisée a été détectée.', 'haute', 15, 'Tunnel non contrôlé', 'Contournement de sécurité', 'T1572'),
+-- INJECTION SQL (35 rÃ¨gles) - CatÃ©gorie 17
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87041, 'Injection SQL - UNION SELECT', 'Injection SQL avec UNION SELECT', 'critique', 17, 'Extraction donnÃ©es base', 'Attaquant lit tables', 'T1190', 'snort'),
+(87042, 'Injection SQL - OR 1=1', 'Pattern classique injection SQL', 'critique', 17, 'Contournement authentification', 'Bypass login par SQL injection', 'T1190', 'snort'),
+(87043, 'Injection SQL - commentaire', 'Commentaires SQL malveillants', 'haute', 17, 'Neutralisation requÃªte originale', 'Troncature requÃªte par -- ou #', 'T1190', 'snort'),
+(87044, 'Injection SQL - SLEEP/BENCHMARK', 'Injection SQL temporelle', 'haute', 17, 'Blind SQL injection temps', 'Test vulnÃ©rabilitÃ© par dÃ©lai', 'T1190', 'snort'),
+(87045, 'Injection SQL - stacked queries', 'RequÃªtes SQL empilÃ©es', 'critique', 17, 'ExÃ©cution commandes SQL multiples', 'Tentative modification donnÃ©es', 'T1190', 'snort'),
+(87046, 'Injection SQL - DROP TABLE', 'Tentative suppression table', 'critique', 17, 'Destruction donnÃ©es', 'Attaque destructrice base', 'T1485', 'snort'),
+(87047, 'Injection SQL - INSERT INTO', 'Tentative insertion donnÃ©es', 'haute', 17, 'Injection donnÃ©es malveillantes', 'CrÃ©ation compte admin ou backdoor', 'T1190', 'snort'),
+(87048, 'Injection SQL - UPDATE SET', 'Tentative modification donnÃ©es', 'critique', 17, 'AltÃ©ration donnÃ©es existantes', 'Modification mots passe ou privilÃ¨ges', 'T1565', 'snort'),
+(87049, 'Injection SQL - DELETE FROM', 'Tentative suppression donnÃ©es', 'critique', 17, 'Effacement donnÃ©es', 'Suppression logs ou utilisateurs', 'T1485', 'snort'),
+(87050, 'Injection SQL - LOAD_FILE', 'Tentative lecture fichier serveur', 'critique', 17, 'Lecture fichiers systÃ¨me via MySQL', 'Extraction /etc/passwd ou config', 'T1005', 'snort'),
+(87051, 'Injection SQL - INTO OUTFILE', 'Tentative Ã©criture fichier', 'critique', 17, 'Ã‰criture webshell sur serveur', 'CrÃ©ation backdoor via SQL', 'T1505.003', 'snort'),
+(87052, 'Injection SQL - information_schema', 'Ã‰numÃ©ration structure base', 'haute', 17, 'DÃ©couverte tables et colonnes', 'Cartographie base donnÃ©es', 'T1190', 'snort'),
+(87053, 'Injection SQL - extractvalue', 'Injection SQL basÃ©e XML', 'haute', 17, 'Technique extraction donnÃ©es', 'Exploitation fonctions XML MySQL', 'T1190', 'snort'),
+(87054, 'Injection SQL - updatexml', 'Injection via fonction updatexml', 'haute', 17, 'Extraction donnÃ©es par erreur XML', 'Error-based SQL injection', 'T1190', 'snort'),
+(87055, 'Injection SQL - CONCAT', 'Utilisation CONCAT extraction', 'haute', 17, 'Assemblage donnÃ©es extraites', 'Technique rÃ©cupÃ©ration donnÃ©es', 'T1190', 'snort'),
+(87056, 'Injection SQL - HEX encoding', 'Injection SQL encodÃ©e hexa', 'haute', 17, 'Tentative Ã©vasion filtres', 'Bypass WAF par encodage', 'T1190', 'snort'),
+(87057, 'Injection SQL - CHAR encoding', 'Injection utilisant CHAR', 'haute', 17, 'Ã‰vasion filtres caractÃ¨res', 'Construction payload par CHAR()', 'T1190', 'snort'),
+(87058, 'Injection SQL - double encoding', 'Double encodage URL dÃ©tectÃ©', 'haute', 17, 'Tentative bypass filtres', 'Ã‰vasion par double URL encoding', 'T1190', 'snort'),
+(87059, 'Injection SQL - SQLMap dÃ©tectÃ©', 'Signature outil SQLMap', 'critique', 17, 'Utilisation outil automatisÃ©', 'Attaque SQL injection automatisÃ©e', 'T1190', 'snort'),
+(87060, 'Injection SQL - auth bypass', 'Contournement login par SQL', 'critique', 17, 'AccÃ¨s non autorisÃ© application', 'admin or Ã©quivalent dÃ©tectÃ©', 'T1190', 'snort'),
+(87061, 'Injection SQL - error based', 'Injection provoquant erreurs SQL', 'haute', 17, 'Extraction infos via messages erreur', 'Exploitation erreurs SQL affichÃ©es', 'T1190', 'snort'),
+(87062, 'Injection SQL - blind boolean', 'Injection SQL aveugle boolÃ©enne', 'haute', 17, 'Extraction bit par bit', 'Test conditions vraies/fausses', 'T1190', 'snort'),
+(87063, 'Injection SQL - second order', 'Injection SQL second ordre', 'haute', 17, 'Payload stockÃ© puis exÃ©cutÃ©', 'Injection diffÃ©rÃ©e temps', 'T1190', 'snort'),
+(87064, 'Injection SQL - proc stockÃ©e', 'Appel procÃ©dure stockÃ©e malveillant', 'critique', 17, 'ExÃ©cution code cÃ´tÃ© serveur', 'xp_cmdshell ou Ã©quivalent', 'T1190', 'snort'),
+(87065, 'Injection SQL - NoSQL', 'Injection base NoSQL', 'haute', 17, 'Attaque MongoDB ou similaire', 'Injection opÃ©rateurs NoSQL', 'T1190', 'snort'),
+(87066, 'Injection SQL - ORDER BY', 'Ã‰numÃ©ration colonnes ORDER BY', 'moyenne', 17, 'DÃ©couverte nombre colonnes', 'PrÃ©paration attaque UNION', 'T1190', 'snort'),
+(87067, 'Injection SQL - GROUP BY', 'Injection via clause GROUP BY', 'moyenne', 17, 'Extraction donnÃ©es agrÃ©gÃ©es', 'Manipulation requÃªtes groupÃ©es', 'T1190', 'snort'),
+(87068, 'Injection SQL - HAVING', 'Injection via clause HAVING', 'moyenne', 17, 'Bypass filtres sur agrÃ©gats', 'Technique Ã©vasion avancÃ©e', 'T1190', 'snort'),
+(87069, 'Injection SQL - sous-requÃªte', 'Injection avec sous-requÃªte', 'haute', 17, 'RequÃªte imbriquÃ©e malveillante', 'Extraction complexe donnÃ©es', 'T1190', 'snort'),
+(87070, 'Injection SQL - CASE WHEN', 'Injection conditionnelle', 'haute', 17, 'Extraction conditionnelle donnÃ©es', 'Blind injection avec conditions', 'T1190', 'snort'),
+(87071, 'Injection SQL - base64', 'Payload SQL encodÃ© base64', 'haute', 17, 'Tentative Ã©vasion dÃ©tection', 'Obfuscation payload', 'T1190', 'snort'),
+(87072, 'Injection SQL - PostgreSQL', 'Injection spÃ©cifique PostgreSQL', 'haute', 17, 'Exploitation fonctions PostgreSQL', 'Syntaxe spÃ©cifique dÃ©tectÃ©e', 'T1190', 'snort'),
+(87073, 'Injection SQL - MSSQL', 'Injection spÃ©cifique Microsoft SQL', 'haute', 17, 'Exploitation fonctions MSSQL', 'xp_cmdshell ou OPENROWSET', 'T1190', 'snort'),
+(87074, 'Injection SQL - Oracle', 'Injection spÃ©cifique Oracle', 'haute', 17, 'Exploitation fonctions Oracle', 'UTL_HTTP ou DBMS dÃ©tectÃ©', 'T1190', 'snort'),
+(87075, 'Injection SQL - SQLite', 'Injection spÃ©cifique SQLite', 'haute', 17, 'Exploitation SQLite', 'Syntaxe SQLite malveillante', 'T1190', 'snort');
 
--- ============================================================================
--- RÈGLES SUPPLÉMENTAIRES APPLICATIONS (40000-40099)
--- ============================================================================
-(40001, 'Échec de démarrage d application', 'Une application critique n a pas pu démarrer.', 'haute', 1, 'Service indisponible', 'Erreur ou attaque', NULL),
-(40002, 'Base de données redémarrée', 'Le serveur de base de données a été redémarré.', 'moyenne', 1, 'Interruption de service', 'Maintenance ou crash', NULL),
-(40003, 'Erreur de connexion à la base de données', 'Une application ne peut pas se connecter à la base de données.', 'haute', 1, 'Service dégradé', 'Problème réseau ou credentials', NULL),
-(40004, 'Quota disque dépassé', 'Un utilisateur ou service a dépassé son quota disque.', 'moyenne', 1, 'Écriture impossible', 'Utilisation excessive', NULL),
-(40005, 'Certificat SSL expiré', 'Un certificat SSL/TLS a expiré.', 'haute', 1, 'Connexions non sécurisées', 'Maintenance oubliée', NULL),
-(40006, 'Certificat SSL bientôt expiré', 'Un certificat SSL/TLS expire dans moins de 30 jours.', 'moyenne', 1, 'Renouvellement requis', 'Maintenance préventive', NULL),
-(40007, 'Backup échoué', 'Une sauvegarde planifiée a échoué.', 'haute', 1, 'Données non sauvegardées', 'Erreur système', NULL),
-(40008, 'Espace de logs critique', 'L espace dédié aux logs est presque plein.', 'haute', 1, 'Perte de logs imminente', 'Rotation insuffisante', NULL),
+-- XSS - CROSS-SITE SCRIPTING (35 rÃ¨gles) - CatÃ©gorie 18
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87076, 'XSS - balise script dÃ©tectÃ©e', 'Injection balise script', 'haute', 18, 'ExÃ©cution JavaScript malveillant', 'XSS rÃ©flÃ©chi ou stockÃ©', 'T1059.007', 'snort'),
+(87077, 'XSS - Ã©vÃ©nement onload', 'Attribut onload malveillant', 'haute', 18, 'ExÃ©cution code au chargement', 'Injection via attribut Ã©vÃ©nement', 'T1059.007', 'snort'),
+(87078, 'XSS - Ã©vÃ©nement onerror', 'Attribut onerror malveillant', 'haute', 18, 'ExÃ©cution via erreur provoquÃ©e', 'XSS dÃ©clenchÃ© par erreur image', 'T1059.007', 'snort'),
+(87079, 'XSS - Ã©vÃ©nement onclick', 'Attribut onclick injectÃ©', 'haute', 18, 'Code exÃ©cutÃ© au clic', 'PiÃ¨ge au clic', 'T1059.007', 'snort'),
+(87080, 'XSS - javascript: URI', 'URI javascript: dÃ©tectÃ©', 'haute', 18, 'ExÃ©cution via protocole javascript', 'Injection dans href ou src', 'T1059.007', 'snort'),
+(87081, 'XSS - data: URI', 'URI data: contenu actif', 'haute', 18, 'Contenu exÃ©cutable encodÃ©', 'Payload dans data URI', 'T1059.007', 'snort'),
+(87082, 'XSS - balise img malveillante', 'Injection via balise image', 'haute', 18, 'XSS sans balise script', 'Technique Ã©vasion filtres', 'T1059.007', 'snort'),
+(87083, 'XSS - balise svg malveillante', 'Injection via SVG', 'haute', 18, 'XSS via contenu SVG', 'Vecteur attaque moderne', 'T1059.007', 'snort'),
+(87084, 'XSS - balise iframe', 'Injection iframe malveillant', 'haute', 18, 'Inclusion contenu externe', 'Clickjacking ou vol donnÃ©es', 'T1059.007', 'snort'),
+(87085, 'XSS - balise body', 'Attribut Ã©vÃ©nement sur body', 'haute', 18, 'ExÃ©cution au chargement page', 'Injection dans balise body', 'T1059.007', 'snort'),
+(87086, 'XSS - document.cookie', 'AccÃ¨s cookies dÃ©tectÃ©', 'critique', 18, 'Vol session utilisateur', 'Exfiltration cookies', 'T1539', 'snort'),
+(87087, 'XSS - document.location', 'Redirection malveillante', 'haute', 18, 'Redirection vers site malveillant', 'Phishing ou drive-by download', 'T1059.007', 'snort'),
+(87088, 'XSS - window.location', 'Manipulation URL', 'haute', 18, 'Redirection forcÃ©e utilisateur', 'Vol session ou phishing', 'T1059.007', 'snort'),
+(87089, 'XSS - eval() dÃ©tectÃ©', 'Utilisation eval()', 'critique', 18, 'ExÃ©cution code arbitraire', 'Fonction dangereuse utilisÃ©e', 'T1059.007', 'snort'),
+(87090, 'XSS - innerHTML', 'Manipulation innerHTML', 'haute', 18, 'Injection HTML dans DOM', 'Modification dynamique contenu', 'T1059.007', 'snort'),
+(87091, 'XSS - document.write', 'Utilisation document.write', 'haute', 18, 'Ã‰criture directe document', 'Injection contenu', 'T1059.007', 'snort'),
+(87092, 'XSS - fromCharCode', 'Obfuscation par fromCharCode', 'haute', 18, 'Ã‰vasion filtres par encodage', 'Payload construit char par char', 'T1059.007', 'snort'),
+(87093, 'XSS - unescape', 'Utilisation unescape()', 'haute', 18, 'DÃ©codage payload obfusquÃ©', 'Technique Ã©vasion', 'T1059.007', 'snort'),
+(87094, 'XSS - atob/btoa', 'Encodage base64 JavaScript', 'haute', 18, 'Payload encodÃ© base64', 'Obfuscation code malveillant', 'T1059.007', 'snort'),
+(87095, 'XSS - expression CSS', 'Expression CSS malveillante', 'haute', 18, 'XSS via propriÃ©tÃ© CSS', 'Technique IE ancienne', 'T1059.007', 'snort'),
+(87096, 'XSS - balise style', 'Injection balise style', 'moyenne', 18, 'Manipulation CSS malveillante', 'Exfiltration via CSS', 'T1059.007', 'snort'),
+(87097, 'XSS - balise link', 'Injection link malveillant', 'haute', 18, 'Chargement ressource externe', 'Inclusion CSS malveillant', 'T1059.007', 'snort'),
+(87098, 'XSS - balise meta', 'Injection meta refresh', 'moyenne', 18, 'Redirection automatique', 'Refresh vers site malveillant', 'T1059.007', 'snort'),
+(87099, 'XSS - balise object', 'Injection objet malveillant', 'haute', 18, 'Chargement contenu actif', 'Flash ou ActiveX malveillant', 'T1059.007', 'snort'),
+(87100, 'XSS - balise embed', 'Injection via embed', 'haute', 18, 'Contenu embarquÃ© malveillant', 'Plugin malveillant chargÃ©', 'T1059.007', 'snort'),
+(87101, 'XSS - balise form', 'Formulaire injectÃ©', 'haute', 18, 'Formulaire phishing', 'Vol credentials', 'T1059.007', 'snort'),
+(87102, 'XSS - balise input', 'Input Ã©vÃ©nement malveillant', 'haute', 18, 'ExÃ©cution sur interaction', 'XSS via champ formulaire', 'T1059.007', 'snort'),
+(87103, 'XSS - balise button', 'Bouton code malveillant', 'haute', 18, 'ExÃ©cution au clic', 'PiÃ¨ge sur bouton', 'T1059.007', 'snort'),
+(87104, 'XSS - balise textarea', 'Textarea avec injection', 'moyenne', 18, 'Code injectÃ© zone texte', 'Stockage payload', 'T1059.007', 'snort'),
+(87105, 'XSS - balise marquee', 'Injection via marquee', 'moyenne', 18, 'Ã‰vÃ©nement sur dÃ©filement', 'Balise obsolÃ¨te exploitÃ©e', 'T1059.007', 'snort'),
+(87106, 'XSS - XMLHttpRequest', 'RequÃªte AJAX malveillante', 'haute', 18, 'Exfiltration donnÃ©es via XHR', 'Communication serveur attaquant', 'T1059.007', 'snort'),
+(87107, 'XSS - fetch API', 'Utilisation malveillante fetch', 'haute', 18, 'Exfiltration via API moderne', 'Vol donnÃ©es par fetch', 'T1059.007', 'snort'),
+(87108, 'XSS - WebSocket', 'WebSocket vers serveur malveillant', 'haute', 18, 'Canal communication persistant', 'C2 via WebSocket', 'T1059.007', 'snort'),
+(87109, 'XSS - postMessage', 'Exploitation postMessage', 'haute', 18, 'Communication inter-frames malveillante', 'Bypass same-origin policy', 'T1059.007', 'snort'),
+(87110, 'XSS - mutation observer', 'Surveillance DOM malveillante', 'moyenne', 18, 'Observation changements DOM', 'Technique keylogging', 'T1059.007', 'snort');
 
--- ============================================================================
--- RÈGLES SUPPLÉMENTAIRES DOCKER/CONTAINERS (45000-45099)
--- ============================================================================
-(45001, 'Container démarré avec privilèges', 'Un container Docker a été démarré avec des privilèges élevés.', 'haute', 1, 'Risque d évasion container', 'Configuration risquée', 'T1611'),
-(45002, 'Image Docker non signée utilisée', 'Une image Docker non vérifiée a été utilisée.', 'moyenne', 1, 'Image potentiellement compromise', 'Pratique risquée', 'T1204'),
-(45003, 'Container accédant au socket Docker', 'Un container accède au socket Docker de l hôte.', 'critique', 1, 'Contrôle total possible', 'Configuration dangereuse', 'T1611'),
-(45004, 'Nouveau container créé', 'Un nouveau container a été créé.', 'info', 1, 'Nouveau service', 'Déploiement normal', NULL),
-(45005, 'Container arrêté de manière inattendue', 'Un container s est arrêté sans raison apparente.', 'moyenne', 1, 'Service interrompu', 'Crash ou arrêt manuel', NULL),
+-- DoS / DDoS (35 rÃ¨gles) - CatÃ©gorie 19
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87111, 'DoS - SYN Flood dÃ©tectÃ©', 'Inondation paquets SYN', 'critique', 19, 'Saturation connexions TCP', 'Attaque dÃ©ni de service', 'T1499.001', 'snort'),
+(87112, 'DoS - UDP Flood dÃ©tectÃ©', 'Inondation paquets UDP', 'critique', 19, 'Saturation bande passante', 'Attaque volumÃ©trique UDP', 'T1499.001', 'snort'),
+(87113, 'DoS - ICMP Flood dÃ©tectÃ©', 'Inondation paquets ICMP', 'haute', 19, 'Saturation par ping', 'Ping flood ou smurf attack', 'T1499.001', 'snort'),
+(87114, 'DoS - HTTP Flood dÃ©tectÃ©', 'Nombreuses requÃªtes HTTP', 'critique', 19, 'Surcharge serveur web', 'Attaque applicative HTTP', 'T1499.002', 'snort'),
+(87115, 'DoS - Slowloris dÃ©tectÃ©', 'Attaque Slowloris identifiÃ©e', 'haute', 19, 'Ã‰puisement connexions', 'Connexions lentes ouvertes', 'T1499.002', 'snort'),
+(87116, 'DoS - Slow POST dÃ©tectÃ©', 'Attaque Slow POST', 'haute', 19, 'RequÃªtes POST trÃ¨s lentes', 'Ã‰puisement threads serveur', 'T1499.002', 'snort'),
+(87117, 'DoS - Slow READ dÃ©tectÃ©', 'Attaque Slow Read', 'haute', 19, 'Lecture trÃ¨s lente rÃ©ponses', 'Maintien connexions ouvertes', 'T1499.002', 'snort'),
+(87118, 'DoS - DNS Amplification', 'Amplification DNS dÃ©tectÃ©e', 'critique', 19, 'Attaque rÃ©flexion DNS', 'Serveur DNS amplificateur', 'T1498.002', 'snort'),
+(87119, 'DoS - NTP Amplification', 'Amplification NTP dÃ©tectÃ©e', 'critique', 19, 'Attaque rÃ©flexion NTP', 'Serveur NTP exploitÃ©', 'T1498.002', 'snort'),
+(87120, 'DoS - SSDP Amplification', 'Amplification SSDP dÃ©tectÃ©e', 'critique', 19, 'Attaque rÃ©flexion SSDP', 'PÃ©riphÃ©riques UPnP exploitÃ©s', 'T1498.002', 'snort'),
+(87121, 'DoS - Memcached Amplification', 'Amplification Memcached', 'critique', 19, 'Attaque massive rÃ©flexion', 'Serveurs Memcached exposÃ©s', 'T1498.002', 'snort'),
+(87122, 'DoS - ACK Flood dÃ©tectÃ©', 'Inondation paquets ACK', 'haute', 19, 'Surcharge par paquets ACK', 'Variation SYN flood', 'T1499.001', 'snort'),
+(87123, 'DoS - RST Flood dÃ©tectÃ©', 'Inondation paquets RST', 'haute', 19, 'Interruption connexions', 'Attaque reset TCP', 'T1499.001', 'snort'),
+(87124, 'DoS - FIN Flood dÃ©tectÃ©', 'Inondation paquets FIN', 'haute', 19, 'Fermeture forcÃ©e connexions', 'Attaque par paquets FIN', 'T1499.001', 'snort'),
+(87125, 'DoS - Fragmentation attack', 'Attaque par fragmentation', 'haute', 19, 'Paquets fragmentÃ©s malveillants', 'Teardrop ou similaire', 'T1499.001', 'snort'),
+(87126, 'DoS - Ping of Death', 'Ping de la mort dÃ©tectÃ©', 'haute', 19, 'Paquet ICMP surdimensionnÃ©', 'Tentative crash systÃ¨me', 'T1499.001', 'snort'),
+(87127, 'DoS - Land Attack', 'Attaque Land dÃ©tectÃ©e', 'haute', 19, 'Source et destination identiques', 'Attaque bouclage TCP', 'T1499.001', 'snort'),
+(87128, 'DoS - Smurf Attack', 'Attaque Smurf dÃ©tectÃ©e', 'haute', 19, 'Amplification ICMP broadcast', 'Ping vers adresse broadcast', 'T1498.002', 'snort'),
+(87129, 'DoS - Christmas Tree Attack', 'Paquets XMAS malveillants', 'haute', 19, 'Tous flags TCP activÃ©s', 'Attaque paquets malformÃ©s', 'T1499.001', 'snort'),
+(87130, 'DoS - Connection exhaustion', 'Ã‰puisement connexions', 'haute', 19, 'Toutes connexions utilisÃ©es', 'Saturation sockets', 'T1499.001', 'snort'),
+(87131, 'DoS - Bandwidth exhaustion', 'Saturation bande passante', 'critique', 19, 'Lien rÃ©seau saturÃ©', 'Attaque volumÃ©trique', 'T1499.001', 'snort'),
+(87132, 'DoS - Application layer', 'Attaque couche application', 'haute', 19, 'Ciblage application', 'DoS applicatif sophistiquÃ©', 'T1499.002', 'snort'),
+(87133, 'DoS - SSL/TLS exhaustion', 'Attaque sur SSL/TLS', 'haute', 19, 'Surcharge handshake SSL', 'Ã‰puisement CPU par crypto', 'T1499.001', 'snort'),
+(87134, 'DoS - Recursive bomb', 'Bombe rÃ©cursive dÃ©tectÃ©e', 'haute', 19, 'RequÃªte causant rÃ©cursion infinie', 'XML bomb ou zip bomb', 'T1499.004', 'snort'),
+(87135, 'DoS - Regex bomb', 'Expression rÃ©guliÃ¨re malveillante', 'haute', 19, 'Regex causant backtracking', 'ReDoS attack', 'T1499.004', 'snort'),
+(87136, 'DDoS - Botnet dÃ©tectÃ©', 'Trafic botnet identifiÃ©', 'critique', 19, 'Attaque distribuÃ©e en cours', 'RÃ©seau machines zombies', 'T1499.001', 'snort'),
+(87137, 'DDoS - Source spoofing', 'Adresses sources falsifiÃ©es', 'critique', 19, 'Impossible bloquer source rÃ©elle', 'IP spoofing attaque DDoS', 'T1499.001', 'snort'),
+(87138, 'DoS - Request smuggling', 'Contrebande requÃªtes', 'haute', 19, 'DÃ©synchronisation serveur', 'HTTP request smuggling', 'T1499.002', 'snort'),
+(87139, 'DoS - Cache poisoning', 'Empoisonnement cache', 'haute', 19, 'Cache servant contenu malveillant', 'Web cache poisoning DoS', 'T1499.002', 'snort'),
+(87140, 'DoS - Hash collision', 'Attaque collision hash', 'haute', 19, 'Surcharge CPU serveur', 'Hash DoS attack', 'T1499.004', 'snort'),
+(87141, 'DoS - Zip bomb dÃ©tectÃ©', 'Archive compressÃ©e malveillante', 'haute', 19, 'DÃ©compression causant crash', 'Fichier zip de la mort', 'T1499.004', 'snort'),
+(87142, 'DoS - XML bomb dÃ©tectÃ©', 'Bombe XML billion laughs', 'haute', 19, 'Parsing XML Ã©puisement mÃ©moire', 'XXE DoS attack', 'T1499.004', 'snort'),
+(87143, 'DoS - DHCP starvation', 'Ã‰puisement baux DHCP', 'haute', 19, 'Plus adresses IP disponibles', 'Attaque serveur DHCP', 'T1499.001', 'snort'),
+(87144, 'DoS - ARP flooding', 'Inondation ARP', 'haute', 19, 'Saturation table ARP', 'Attaque rÃ©seau local', 'T1499.001', 'snort'),
+(87145, 'DoS - MAC flooding', 'Inondation adresses MAC', 'haute', 19, 'Saturation table MAC switch', 'Transformation switch en hub', 'T1499.001', 'snort');
 
--- ============================================================================
--- RÈGLES SUPPLÉMENTAIRES CLOUD (50000-50099)
--- ============================================================================
-(50001, 'Accès API cloud depuis nouvelle IP', 'Un accès API cloud provient d une IP inconnue.', 'moyenne', 8, 'Possible compromission', 'Nouvel emplacement ou vol credentials', 'T1078'),
-(50002, 'Création de nouvel utilisateur cloud', 'Un nouvel utilisateur a été créé sur le compte cloud.', 'moyenne', 16, 'Nouveau compte', 'Administration ou compromission', 'T1136'),
-(50003, 'Modification des règles de sécurité cloud', 'Les règles de sécurité du cloud ont été modifiées.', 'haute', 16, 'Exposition possible', 'Administration ou attaque', 'T1562'),
-(50004, 'Bucket S3 rendu public', 'Un bucket de stockage a été rendu accessible publiquement.', 'critique', 16, 'Données exposées', 'Erreur ou attaque', 'T1530'),
-(50005, 'Clé API cloud créée', 'Une nouvelle clé API cloud a été générée.', 'moyenne', 16, 'Nouvel accès programmatique', 'Administration ou compromission', 'T1098'),
+-- BACKDOORS & SHELLS (30 rÃ¨gles) - CatÃ©gorie 20
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87146, 'Backdoor - Reverse shell dÃ©tectÃ©', 'Connexion shell inversÃ©e', 'critique', 20, 'Attaquant a accÃ¨s systÃ¨me', 'Shell sortant vers attaquant', 'T1059', 'snort'),
+(87147, 'Backdoor - Bind shell dÃ©tectÃ©', 'Shell en Ã©coute dÃ©tectÃ©', 'critique', 20, 'Port backdoor ouvert', 'Shell attendant connexion', 'T1059', 'snort'),
+(87148, 'Backdoor - Netcat shell', 'Netcat utilisÃ© comme shell', 'critique', 20, 'Outil polyvalent backdoor', 'nc -e /bin/bash dÃ©tectÃ©', 'T1059.004', 'snort'),
+(87149, 'Backdoor - Web shell PHP', 'Shell PHP dÃ©tectÃ©', 'critique', 20, 'Backdoor web serveur PHP', 'c99 r57 ou shell custom', 'T1505.003', 'snort'),
+(87150, 'Backdoor - Web shell ASP', 'Shell ASP dÃ©tectÃ©', 'critique', 20, 'Backdoor web serveur IIS', 'Shell ASP/ASPX malveillant', 'T1505.003', 'snort'),
+(87151, 'Backdoor - Web shell JSP', 'Shell JSP dÃ©tectÃ©', 'critique', 20, 'Backdoor serveur Java', 'Shell JSP malveillant', 'T1505.003', 'snort'),
+(87152, 'Backdoor - Meterpreter dÃ©tectÃ©', 'Payload Metasploit identifiÃ©', 'critique', 20, 'Framework attaque Metasploit', 'Meterpreter shell actif', 'T1059', 'snort'),
+(87153, 'Backdoor - Cobalt Strike beacon', 'Beacon Cobalt Strike', 'critique', 20, 'Outil attaque avancÃ© dÃ©tectÃ©', 'Infrastructure C2 Cobalt Strike', 'T1071', 'snort'),
+(87154, 'Backdoor - Empire agent', 'Agent PowerShell Empire', 'critique', 20, 'Framework post-exploitation', 'Agent Empire actif', 'T1059.001', 'snort'),
+(87155, 'Backdoor - Trafic C2 dÃ©tectÃ©', 'Communication Command Control', 'critique', 20, 'Machine communique serveur attaquant', 'Canal commande Ã©tabli', 'T1071', 'snort'),
+(87156, 'Backdoor - IRC bot dÃ©tectÃ©', 'Bot IRC malveillant', 'haute', 20, 'Machine partie botnet IRC', 'ContrÃ´le via canal IRC', 'T1071.001', 'snort'),
+(87157, 'Backdoor - Tunnel SSH dÃ©tectÃ©', 'Tunnel SSH suspect', 'haute', 20, 'SSH utilisÃ© tunneling', 'Exfiltration ou C2 via SSH', 'T1572', 'snort'),
+(87158, 'Backdoor - Tunnel DNS dÃ©tectÃ©', 'Tunnel DNS identifiÃ©', 'critique', 20, 'Communication cachÃ©e via DNS', 'Exfiltration requÃªtes DNS', 'T1572', 'snort'),
+(87159, 'Backdoor - Tunnel ICMP dÃ©tectÃ©', 'Tunnel ICMP identifiÃ©', 'haute', 20, 'DonnÃ©es cachÃ©es paquets ICMP', 'Covert channel ICMP', 'T1572', 'snort'),
+(87160, 'Backdoor - Tunnel HTTP dÃ©tectÃ©', 'Tunnel HTTP suspect', 'haute', 20, 'Communication C2 via HTTP', 'Trafic malveillant dans HTTP', 'T1071.001', 'snort'),
+(87161, 'Backdoor - RAT dÃ©tectÃ©', 'Remote Access Trojan', 'critique', 20, 'ContrÃ´le distance systÃ¨me', 'RAT actif machine', 'T1219', 'snort'),
+(87162, 'Backdoor - njRAT dÃ©tectÃ©', 'Trojan njRAT identifiÃ©', 'critique', 20, 'Malware contrÃ´le distance', 'njRAT actif', 'T1219', 'snort'),
+(87163, 'Backdoor - DarkComet dÃ©tectÃ©', 'Trojan DarkComet', 'critique', 20, 'RAT DarkComet actif', 'ContrÃ´le total machine', 'T1219', 'snort'),
+(87164, 'Backdoor - Poison Ivy dÃ©tectÃ©', 'Trojan Poison Ivy', 'critique', 20, 'RAT sophistiquÃ© actif', 'Malware espionnage', 'T1219', 'snort'),
+(87165, 'Backdoor - Quasar RAT dÃ©tectÃ©', 'Trojan Quasar identifiÃ©', 'critique', 20, 'RAT open-source actif', 'Outil admin malveillant', 'T1219', 'snort'),
+(87166, 'Backdoor - TeamViewer abuse', 'TeamViewer usage suspect', 'haute', 20, 'Outil lÃ©gitime utilisÃ© malicieusement', 'AccÃ¨s distant non autorisÃ©', 'T1219', 'snort'),
+(87167, 'Backdoor - AnyDesk abuse', 'AnyDesk usage suspect', 'haute', 20, 'Outil accÃ¨s distant abusÃ©', 'ContrÃ´le non autorisÃ©', 'T1219', 'snort'),
+(87168, 'Backdoor - Cryptominer dÃ©tectÃ©', 'Mineur cryptomonnaie', 'haute', 20, 'Ressources utilisÃ©es minage', 'Cryptojacking actif', 'T1496', 'snort'),
+(87169, 'Backdoor - Keylogger dÃ©tectÃ©', 'Enregistreur frappe', 'critique', 20, 'Capture saisies clavier', 'Vol mots de passe', 'T1056.001', 'snort'),
+(87170, 'Backdoor - Rootkit communication', 'Communication rootkit dÃ©tectÃ©e', 'critique', 20, 'Rootkit actif communique', 'SystÃ¨me profondÃ©ment compromis', 'T1014', 'snort'),
+(87171, 'Backdoor - Persistence mechanism', 'MÃ©canisme persistance', 'haute', 20, 'Backdoor configure persistance', 'Survie au redÃ©marrage', 'T1547', 'snort'),
+(87172, 'Backdoor - Scheduled task', 'TÃ¢che planifiÃ©e suspecte', 'haute', 20, 'ExÃ©cution programmÃ©e malware', 'Persistance par tÃ¢che planifiÃ©e', 'T1053', 'snort'),
+(87173, 'Backdoor - Registry persistence', 'Persistance via registre', 'haute', 20, 'ClÃ© registre malveillante', 'Autorun malveillant', 'T1547.001', 'snort'),
+(87174, 'Backdoor - Service malveillant', 'Service systÃ¨me backdoor', 'haute', 20, 'Service crÃ©Ã© malware', 'Persistance par service', 'T1543.003', 'snort'),
+(87175, 'Backdoor - DLL hijacking', 'DÃ©tournement DLL', 'haute', 20, 'DLL lÃ©gitime remplacÃ©e', 'ExÃ©cution code malveillant', 'T1574.001', 'snort');
 
--- ============================================================================
--- RÈGLE PAR DÉFAUT - NON IDENTIFIÉ
--- ============================================================================
-(99999, 'Alerte non identifiée', 'Cette alerte n a pas été reconnue par la base de connaissances SIEM Africa. Une analyse manuelle est requise.', 'moyenne', 20, 'Impact inconnu - analyse requise', 'Nouvelle menace ou faux positif', NULL);
+-- BRUTE FORCE (25 rÃ¨gles) - CatÃ©gorie 21
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87176, 'Brute Force - SSH dÃ©tectÃ©', 'Attaque force brute SSH', 'critique', 21, 'Tentative deviner mot passe SSH', 'Outil Hydra ou Medusa', 'T1110.001', 'snort'),
+(87177, 'Brute Force - FTP dÃ©tectÃ©', 'Attaque force brute FTP', 'haute', 21, 'Tentative deviner identifiants FTP', 'Attaque automatisÃ©e FTP', 'T1110.001', 'snort'),
+(87178, 'Brute Force - Telnet dÃ©tectÃ©', 'Attaque force brute Telnet', 'haute', 21, 'Tentative service Telnet', 'Protocole non sÃ©curisÃ© ciblÃ©', 'T1110.001', 'snort'),
+(87179, 'Brute Force - HTTP Basic Auth', 'Attaque auth HTTP', 'haute', 21, 'Force brute Basic Auth', 'Tentative accÃ¨s web', 'T1110.001', 'snort'),
+(87180, 'Brute Force - HTTP Form', 'Attaque formulaire web', 'haute', 21, 'Force brute login web', 'Soumission massive credentials', 'T1110.001', 'snort'),
+(87181, 'Brute Force - RDP dÃ©tectÃ©', 'Attaque force brute RDP', 'critique', 21, 'Tentative Remote Desktop', 'Ciblage accÃ¨s Windows', 'T1110.001', 'snort'),
+(87182, 'Brute Force - VNC dÃ©tectÃ©', 'Attaque force brute VNC', 'haute', 21, 'Tentative bureau distant VNC', 'AccÃ¨s graphique ciblÃ©', 'T1110.001', 'snort'),
+(87183, 'Brute Force - SMB dÃ©tectÃ©', 'Attaque force brute SMB', 'haute', 21, 'Tentative partages Windows', 'AccÃ¨s fichiers ciblÃ©', 'T1110.001', 'snort'),
+(87184, 'Brute Force - SMTP dÃ©tectÃ©', 'Attaque force brute SMTP', 'moyenne', 21, 'Tentative serveur mail', 'Compromission compte email', 'T1110.001', 'snort'),
+(87185, 'Brute Force - POP3 dÃ©tectÃ©', 'Attaque force brute POP3', 'moyenne', 21, 'Tentative boÃ®te mail POP', 'Vol emails ciblÃ©', 'T1110.001', 'snort'),
+(87186, 'Brute Force - IMAP dÃ©tectÃ©', 'Attaque force brute IMAP', 'moyenne', 21, 'Tentative boÃ®te mail IMAP', 'AccÃ¨s emails ciblÃ©', 'T1110.001', 'snort'),
+(87187, 'Brute Force - MySQL dÃ©tectÃ©', 'Attaque force brute MySQL', 'haute', 21, 'Tentative base donnÃ©es', 'AccÃ¨s donnÃ©es ciblÃ©', 'T1110.001', 'snort'),
+(87188, 'Brute Force - PostgreSQL', 'Attaque force brute PostgreSQL', 'haute', 21, 'Tentative base PostgreSQL', 'Base donnÃ©es ciblÃ©e', 'T1110.001', 'snort'),
+(87189, 'Brute Force - MSSQL dÃ©tectÃ©', 'Attaque force brute MSSQL', 'haute', 21, 'Tentative SQL Server', 'Base Microsoft ciblÃ©e', 'T1110.001', 'snort'),
+(87190, 'Brute Force - MongoDB dÃ©tectÃ©', 'Attaque force brute MongoDB', 'haute', 21, 'Tentative base NoSQL', 'MongoDB ciblÃ©', 'T1110.001', 'snort'),
+(87191, 'Brute Force - LDAP dÃ©tectÃ©', 'Attaque force brute LDAP', 'haute', 21, 'Tentative annuaire', 'Active Directory ciblÃ©', 'T1110.001', 'snort'),
+(87192, 'Brute Force - SNMP community', 'Force brute community SNMP', 'moyenne', 21, 'Test community strings', 'AccÃ¨s info systÃ¨me', 'T1110.001', 'snort'),
+(87193, 'Brute Force - Wordpress', 'Attaque wp-login', 'haute', 21, 'Force brute admin WordPress', 'CMS ciblÃ©', 'T1110.001', 'snort'),
+(87194, 'Brute Force - Joomla dÃ©tectÃ©', 'Attaque admin Joomla', 'haute', 21, 'Force brute admin Joomla', 'CMS ciblÃ©', 'T1110.001', 'snort'),
+(87195, 'Brute Force - Drupal dÃ©tectÃ©', 'Attaque admin Drupal', 'haute', 21, 'Force brute admin Drupal', 'CMS ciblÃ©', 'T1110.001', 'snort'),
+(87196, 'Credential Stuffing dÃ©tectÃ©', 'Credentials volÃ©s utilisÃ©s', 'haute', 21, 'Test couples user/pass connus', 'Base donnÃ©es leaks utilisÃ©e', 'T1110.004', 'snort'),
+(87197, 'Password Spraying dÃ©tectÃ©', 'PulvÃ©risation mots passe', 'haute', 21, 'MÃªme password plusieurs comptes', 'Ã‰vitement verrouillage', 'T1110.003', 'snort'),
+(87198, 'Brute Force - Hydra dÃ©tectÃ©', 'Outil Hydra identifiÃ©', 'critique', 21, 'Outil force brute populaire', 'THC-Hydra en action', 'T1110.001', 'snort'),
+(87199, 'Brute Force - Medusa dÃ©tectÃ©', 'Outil Medusa identifiÃ©', 'critique', 21, 'Outil force brute rapide', 'Medusa en action', 'T1110.001', 'snort'),
+(87200, 'Brute Force - Ncrack dÃ©tectÃ©', 'Outil Ncrack identifiÃ©', 'critique', 21, 'Outil Nmap force brute', 'Ncrack en action', 'T1110.001', 'snort');
 
--- ============================================================================
+-- EXPLOITS (35 rÃ¨gles) - CatÃ©gorie 22
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87201, 'Exploit - Buffer overflow dÃ©tectÃ©', 'Tentative dÃ©passement tampon', 'critique', 22, 'ExÃ©cution code arbitraire possible', 'Exploitation vulnÃ©rabilitÃ© mÃ©moire', 'T1203', 'snort'),
+(87202, 'Exploit - Format string attack', 'Attaque chaÃ®ne format', 'critique', 22, 'Lecture/Ã©criture mÃ©moire arbitraire', 'Exploitation printf vulnÃ©rable', 'T1203', 'snort'),
+(87203, 'Exploit - Heap overflow dÃ©tectÃ©', 'DÃ©passement tas dÃ©tectÃ©', 'critique', 22, 'Corruption de la heap', 'Exploitation avancÃ©e', 'T1203', 'snort'),
+(87204, 'Exploit - Stack overflow dÃ©tectÃ©', 'DÃ©passement pile dÃ©tectÃ©', 'critique', 22, 'Corruption de la stack', 'Buffer overflow classique', 'T1203', 'snort'),
+(87205, 'Exploit - Use after free', 'Utilisation aprÃ¨s libÃ©ration', 'critique', 22, 'Exploitation mÃ©moire libÃ©rÃ©e', 'VulnÃ©rabilitÃ© UAF', 'T1203', 'snort'),
+(87206, 'Exploit - Integer overflow', 'DÃ©passement entier', 'haute', 22, 'Calcul causant overflow', 'Contournement vÃ©rifications', 'T1203', 'snort'),
+(87207, 'Exploit - Path traversal', 'TraversÃ©e rÃ©pertoires', 'haute', 22, 'AccÃ¨s fichiers hors webroot', 'Lecture fichiers sensibles', 'T1083', 'snort'),
+(87208, 'Exploit - Local File Inclusion', 'Inclusion fichier local', 'critique', 22, 'Inclusion fichiers serveur', 'LFI vers RCE possible', 'T1505', 'snort'),
+(87209, 'Exploit - Remote File Inclusion', 'Inclusion fichier distant', 'critique', 22, 'Inclusion code malveillant externe', 'RFI menant Ã  RCE', 'T1505', 'snort'),
+(87210, 'Exploit - Command injection', 'Injection commande OS', 'critique', 22, 'ExÃ©cution commandes systÃ¨me', 'Shell command injection', 'T1059', 'snort'),
+(87211, 'Exploit - LDAP injection', 'Injection LDAP dÃ©tectÃ©e', 'haute', 22, 'Manipulation requÃªtes LDAP', 'Bypass auth AD', 'T1190', 'snort'),
+(87212, 'Exploit - XPath injection', 'Injection XPath dÃ©tectÃ©e', 'haute', 22, 'Manipulation requÃªtes XML', 'Extraction donnÃ©es XML', 'T1190', 'snort'),
+(87213, 'Exploit - XXE dÃ©tectÃ©', 'XML External Entity attack', 'critique', 22, 'Inclusion entitÃ©s externes XML', 'Lecture fichiers ou SSRF', 'T1190', 'snort'),
+(87214, 'Exploit - SSRF dÃ©tectÃ©', 'Server-Side Request Forgery', 'haute', 22, 'RequÃªtes forgÃ©es cÃ´tÃ© serveur', 'AccÃ¨s rÃ©seau interne', 'T1190', 'snort'),
+(87215, 'Exploit - Deserialization attack', 'Attaque dÃ©sÃ©rialisation', 'critique', 22, 'Objet malveillant dÃ©sÃ©rialisÃ©', 'RCE via dÃ©sÃ©rialisation', 'T1190', 'snort'),
+(87216, 'Exploit - Shellshock dÃ©tectÃ©', 'VulnÃ©rabilitÃ© Shellshock', 'critique', 22, 'Exploitation Bash CVE-2014-6271', 'ExÃ©cution code via CGI', 'T1190', 'snort'),
+(87217, 'Exploit - Heartbleed dÃ©tectÃ©', 'VulnÃ©rabilitÃ© Heartbleed', 'critique', 22, 'Fuite mÃ©moire OpenSSL', 'Vol clÃ©s privÃ©es possible', 'T1190', 'snort'),
+(87218, 'Exploit - EternalBlue dÃ©tectÃ©', 'Exploit EternalBlue SMB', 'critique', 22, 'Exploitation MS17-010', 'Propagation type WannaCry', 'T1210', 'snort'),
+(87219, 'Exploit - BlueKeep dÃ©tectÃ©', 'VulnÃ©rabilitÃ© BlueKeep RDP', 'critique', 22, 'Exploitation CVE-2019-0708', 'RCE sur RDP sans auth', 'T1210', 'snort'),
+(87220, 'Exploit - Log4Shell dÃ©tectÃ©', 'VulnÃ©rabilitÃ© Log4j', 'critique', 22, 'Exploitation CVE-2021-44228', 'RCE via JNDI injection', 'T1190', 'snort'),
+(87221, 'Exploit - ProxyLogon dÃ©tectÃ©', 'VulnÃ©rabilitÃ© Exchange', 'critique', 22, 'Exploitation CVE-2021-26855', 'AccÃ¨s Exchange sans auth', 'T1190', 'snort'),
+(87222, 'Exploit - ProxyShell dÃ©tectÃ©', 'ChaÃ®ne ProxyShell Exchange', 'critique', 22, 'Exploitation CVE-2021-34473', 'RCE sur Exchange', 'T1190', 'snort'),
+(87223, 'Exploit - Spring4Shell dÃ©tectÃ©', 'VulnÃ©rabilitÃ© Spring Framework', 'critique', 22, 'Exploitation CVE-2022-22965', 'RCE applications Spring', 'T1190', 'snort'),
+(87224, 'Exploit - Metasploit payload', 'Payload Metasploit dÃ©tectÃ©', 'critique', 22, 'Utilisation framework exploit', 'Attaque automatisÃ©e', 'T1203', 'snort'),
+(87225, 'Exploit - Struts RCE dÃ©tectÃ©', 'VulnÃ©rabilitÃ© Apache Struts', 'critique', 22, 'Exploitation Struts', 'RCE applications Java', 'T1190', 'snort'),
+(87226, 'Exploit - Drupalgeddon dÃ©tectÃ©', 'VulnÃ©rabilitÃ© Drupal', 'critique', 22, 'Exploitation Drupal RCE', 'Compromission CMS', 'T1190', 'snort'),
+(87227, 'Exploit - ThinkPHP RCE', 'VulnÃ©rabilitÃ© ThinkPHP', 'critique', 22, 'Exploitation framework PHP', 'RCE applications ThinkPHP', 'T1190', 'snort'),
+(87228, 'Exploit - Jenkins RCE', 'VulnÃ©rabilitÃ© Jenkins', 'critique', 22, 'Exploitation Jenkins', 'Compromission CI/CD', 'T1190', 'snort'),
+(87229, 'Exploit - Jira RCE', 'VulnÃ©rabilitÃ© Atlassian Jira', 'critique', 22, 'Exploitation Jira', 'RCE gestionnaire tickets', 'T1190', 'snort'),
+(87230, 'Exploit - Confluence RCE', 'VulnÃ©rabilitÃ© Confluence', 'critique', 22, 'Exploitation CVE-2022-26134', 'RCE wiki Confluence', 'T1190', 'snort'),
+(87231, 'Exploit - vCenter RCE', 'VulnÃ©rabilitÃ© VMware vCenter', 'critique', 22, 'Exploitation vCenter', 'Compromission infra virtuelle', 'T1190', 'snort'),
+(87232, 'Exploit - Citrix ADC', 'VulnÃ©rabilitÃ© Citrix Gateway', 'critique', 22, 'Exploitation CVE-2019-19781', 'Compromission accÃ¨s distant', 'T1190', 'snort'),
+(87233, 'Exploit - PulseSecure VPN', 'VulnÃ©rabilitÃ© Pulse Secure', 'critique', 22, 'Exploitation VPN Pulse', 'AccÃ¨s rÃ©seau compromis', 'T1190', 'snort'),
+(87234, 'Exploit - Fortinet VPN', 'VulnÃ©rabilitÃ© FortiGate', 'critique', 22, 'Exploitation VPN Fortinet', 'AccÃ¨s rÃ©seau compromis', 'T1190', 'snort'),
+(87235, 'Exploit - SolarWinds SUNBURST', 'Backdoor SolarWinds', 'critique', 22, 'DÃ©tection SUNBURST', 'Supply chain attack', 'T1195.002', 'snort');
+
+-- MALWARE & VIRUS (30 rÃ¨gles) - CatÃ©gorie 23
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87236, 'Malware - Ransomware dÃ©tectÃ©', 'Comportement ransomware', 'critique', 23, 'Chiffrement fichiers en cours', 'Cryptolocker ou similaire', 'T1486', 'snort'),
+(87237, 'Malware - WannaCry dÃ©tectÃ©', 'Ransomware WannaCry', 'critique', 23, 'WannaCry identifiÃ©', 'Propagation via EternalBlue', 'T1486', 'snort'),
+(87238, 'Malware - Ryuk dÃ©tectÃ©', 'Ransomware Ryuk', 'critique', 23, 'Ryuk ransomware actif', 'Ciblage entreprises', 'T1486', 'snort'),
+(87239, 'Malware - REvil dÃ©tectÃ©', 'Ransomware REvil/Sodinokibi', 'critique', 23, 'REvil identifiÃ©', 'Ransomware-as-a-Service', 'T1486', 'snort'),
+(87240, 'Malware - Emotet dÃ©tectÃ©', 'Trojan Emotet', 'critique', 23, 'Emotet actif', 'Loader malware', 'T1204', 'snort'),
+(87241, 'Malware - TrickBot dÃ©tectÃ©', 'Trojan TrickBot', 'critique', 23, 'TrickBot identifiÃ©', 'Vol credentials bancaires', 'T1204', 'snort'),
+(87242, 'Malware - Qbot dÃ©tectÃ©', 'Trojan Qakbot', 'critique', 23, 'Qbot actif', 'Banking trojan', 'T1204', 'snort'),
+(87243, 'Malware - Dridex dÃ©tectÃ©', 'Trojan Dridex', 'critique', 23, 'Dridex identifiÃ©', 'Vol bancaire', 'T1204', 'snort'),
+(87244, 'Malware - Zeus dÃ©tectÃ©', 'Trojan Zeus/Zbot', 'critique', 23, 'Zeus actif', 'Banking trojan historique', 'T1204', 'snort'),
+(87245, 'Malware - Mirai dÃ©tectÃ©', 'Botnet Mirai', 'critique', 23, 'Infection Mirai', 'Botnet IoT', 'T1584', 'snort'),
+(87246, 'Malware - Conficker dÃ©tectÃ©', 'Ver Conficker', 'haute', 23, 'Conficker identifiÃ©', 'Ver se propageant via SMB', 'T1210', 'snort'),
+(87247, 'Malware - Agent Tesla', 'Spyware Agent Tesla', 'critique', 23, 'Keylogger Agent Tesla', 'Vol credentials', 'T1056.001', 'snort'),
+(87248, 'Malware - FormBook dÃ©tectÃ©', 'Infostealer FormBook', 'critique', 23, 'FormBook actif', 'Vol donnÃ©es formulaires', 'T1056', 'snort'),
+(87249, 'Malware - LokiBot dÃ©tectÃ©', 'Infostealer LokiBot', 'haute', 23, 'LokiBot identifiÃ©', 'Vol mots de passe', 'T1555', 'snort'),
+(87250, 'Malware - RedLine Stealer', 'Infostealer RedLine', 'critique', 23, 'RedLine actif', 'Vol donnÃ©es navigateur', 'T1555.003', 'snort'),
+(87251, 'Malware - Raccoon Stealer', 'Infostealer Raccoon', 'critique', 23, 'Raccoon identifiÃ©', 'MaaS - Malware as Service', 'T1555', 'snort'),
+(87252, 'Malware - AsyncRAT dÃ©tectÃ©', 'RAT AsyncRAT', 'critique', 23, 'AsyncRAT actif', 'ContrÃ´le distance', 'T1219', 'snort'),
+(87253, 'Malware - RemcosRAT dÃ©tectÃ©', 'Trojan Remcos', 'critique', 23, 'Remcos identifiÃ©', 'Outil surveillance', 'T1219', 'snort'),
+(87254, 'Malware - NanoCore dÃ©tectÃ©', 'RAT NanoCore', 'critique', 23, 'NanoCore actif', 'RAT vendu darknet', 'T1219', 'snort'),
+(87255, 'Malware - Adware dÃ©tectÃ©', 'Logiciel publicitaire', 'moyenne', 23, 'Adware installÃ©', 'PublicitÃ©s intrusives', 'T1204', 'snort'),
+(87256, 'Malware - Spyware dÃ©tectÃ©', 'Logiciel espion', 'haute', 23, 'Spyware actif', 'Surveillance utilisateur', 'T1056', 'snort'),
+(87257, 'Malware - Worm detected', 'Ver informatique dÃ©tectÃ©', 'haute', 23, 'Ver en propagation', 'Auto-rÃ©plication rÃ©seau', 'T1210', 'snort'),
+(87258, 'Malware - Dropper dÃ©tectÃ©', 'Programme dÃ©posant malware', 'haute', 23, 'Dropper identifiÃ©', 'Installation charge utile', 'T1204', 'snort'),
+(87259, 'Malware - Downloader dÃ©tectÃ©', 'TÃ©lÃ©chargeur malware', 'haute', 23, 'Downloader actif', 'TÃ©lÃ©chargement payload', 'T1105', 'snort'),
+(87260, 'Malware - Cryptominer dÃ©tectÃ©', 'Mineur cryptomonnaie', 'haute', 23, 'Minage non autorisÃ©', 'Cryptojacking', 'T1496', 'snort'),
+(87261, 'Malware - XMRig dÃ©tectÃ©', 'Mineur Monero XMRig', 'haute', 23, 'XMRig actif', 'Minage Monero', 'T1496', 'snort'),
+(87262, 'Malware - Cobalt Strike', 'Framework Cobalt Strike', 'critique', 23, 'Beacon CS identifiÃ©', 'Outil red team malveillant', 'T1071', 'snort'),
+(87263, 'Malware - Mimikatz detected', 'Outil Mimikatz', 'critique', 23, 'Mimikatz utilisÃ©', 'Extraction credentials', 'T1003', 'snort'),
+(87264, 'Malware - PsExec abuse', 'Usage suspect PsExec', 'haute', 23, 'PsExec lateral movement', 'DÃ©placement latÃ©ral', 'T1570', 'snort'),
+(87265, 'Malware - BazarLoader dÃ©tectÃ©', 'Loader BazarBackdoor', 'critique', 23, 'BazarLoader actif', 'Chargeur ransomware', 'T1204', 'snort');
+
+-- PROTOCOLES SUSPECTS (20 rÃ¨gles) - CatÃ©gorie 24
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87266, 'Protocole - DNS over HTTPS suspect', 'DoH vers serveur non standard', 'moyenne', 24, 'DNS chiffrÃ© serveur inconnu', 'Possible exfiltration ou C2', 'T1071.004', 'snort'),
+(87267, 'Protocole - DNS over TLS suspect', 'DoT vers serveur non standard', 'moyenne', 24, 'DNS chiffrÃ© suspect', 'Canal cachÃ© potentiel', 'T1071.004', 'snort'),
+(87268, 'Protocole - ICMP payload anormal', 'DonnÃ©es suspectes ICMP', 'haute', 24, 'Tunnel ICMP probable', 'Exfiltration via ping', 'T1572', 'snort'),
+(87269, 'Protocole - DNS requÃªte longue', 'Sous-domaine anormalement long', 'haute', 24, 'Possible tunnel DNS', 'DonnÃ©es encodÃ©es DNS', 'T1071.004', 'snort'),
+(87270, 'Protocole - DNS type TXT suspect', 'RequÃªte TXT inhabituelle', 'moyenne', 24, 'Possible canal C2', 'Commandes dans records TXT', 'T1071.004', 'snort'),
+(87271, 'Protocole - HTTP port non standard', 'HTTP port inhabituel', 'moyenne', 24, 'Service web non standard', 'Possible backdoor web', 'T1571', 'snort'),
+(87272, 'Protocole - SSL port non standard', 'HTTPS port inhabituel', 'moyenne', 24, 'Chiffrement port suspect', 'C2 chiffrÃ© probable', 'T1571', 'snort'),
+(87273, 'Protocole - IRC trafic dÃ©tectÃ©', 'Communication IRC', 'haute', 24, 'Protocole IRC utilisÃ©', 'Possible botnet IRC', 'T1071.001', 'snort'),
+(87274, 'Protocole - Tor trafic dÃ©tectÃ©', 'Connexion rÃ©seau Tor', 'haute', 24, 'Utilisation Tor', 'Anonymisation ou darknet', 'T1090.003', 'snort'),
+(87275, 'Protocole - VPN non autorisÃ©', 'Connexion VPN suspecte', 'moyenne', 24, 'VPN non approuvÃ© utilisÃ©', 'Contournement politique', 'T1572', 'snort'),
+(87276, 'Protocole - Proxy non autorisÃ©', 'Utilisation proxy suspect', 'moyenne', 24, 'Proxy non approuvÃ©', 'Contournement filtrage', 'T1090', 'snort'),
+(87277, 'Protocole - SOCKS trafic dÃ©tectÃ©', 'Proxy SOCKS identifiÃ©', 'moyenne', 24, 'Tunnel SOCKS actif', 'Pivoting ou exfiltration', 'T1090', 'snort'),
+(87278, 'Protocole - P2P trafic dÃ©tectÃ©', 'Trafic peer-to-peer', 'faible', 24, 'Application P2P utilisÃ©e', 'Torrent ou partage fichiers', 'T1071', 'snort'),
+(87279, 'Protocole - Bitcoin trafic', 'Communication cryptocurrency', 'moyenne', 24, 'Trafic Bitcoin dÃ©tectÃ©', 'Possible ransomware paiement', 'T1496', 'snort'),
+(87280, 'Protocole - Telnet en clair', 'Auth Telnet visible', 'haute', 24, 'Credentials en clair', 'Protocole non sÃ©curisÃ©', 'T1552', 'snort'),
+(87281, 'Protocole - FTP en clair', 'Auth FTP visible', 'haute', 24, 'Mot passe FTP exposÃ©', 'Protocole non sÃ©curisÃ©', 'T1552', 'snort'),
+(87282, 'Protocole - HTTP Basic Auth clair', 'Credentials HTTP clair', 'haute', 24, 'Auth non chiffrÃ©e', 'Vol credentials possible', 'T1552', 'snort'),
+(87283, 'Protocole - SMTP relay suspect', 'Relais SMTP non autorisÃ©', 'haute', 24, 'Serveur mail relais', 'Spam ou phishing', 'T1071.003', 'snort'),
+(87284, 'Protocole - NTP amplification', 'RequÃªte NTP monlist', 'haute', 24, 'Commande NTP dangereuse', 'PrÃ©paration attaque DDoS', 'T1498.002', 'snort'),
+(87285, 'Protocole - SNMP community default', 'Community SNMP dÃ©faut', 'haute', 24, 'SNMP mal configurÃ©', 'public ou private utilisÃ©', 'T1552', 'snort');
+
+-- PHISHING & SPAM (15 rÃ¨gles) - CatÃ©gorie 25
+INSERT INTO regles (wazuh_rule_id, nom_fr, description, gravite, categorie_id, impact, cause_probable, mitre_id, source) VALUES
+(87286, 'Phishing - URL suspecte dÃ©tectÃ©e', 'Lien phishing probable', 'haute', 25, 'Utilisateur ciblÃ© phishing', 'Email ou site hameÃ§onnage', 'T1566', 'snort'),
+(87287, 'Phishing - Typosquatting dÃ©tectÃ©', 'Domaine similaire marque', 'haute', 25, 'Faux site imitant lÃ©gitime', 'Usurpation identitÃ©', 'T1566.002', 'snort'),
+(87288, 'Phishing - Homograph attack', 'CaractÃ¨res Unicode trompeurs', 'haute', 25, 'URL visuellement trompeuse', 'CaractÃ¨res ressemblants', 'T1566.002', 'snort'),
+(87289, 'Phishing - Faux login Microsoft', 'Page login O365 frauduleuse', 'critique', 25, 'Vol credentials Microsoft', 'Phishing ciblant Office 365', 'T1566.002', 'snort'),
+(87290, 'Phishing - Faux login Google', 'Page login Google frauduleuse', 'critique', 25, 'Vol credentials Google', 'Phishing ciblant Gmail', 'T1566.002', 'snort'),
+(87291, 'Phishing - Faux login bancaire', 'Page bancaire frauduleuse', 'critique', 25, 'Vol credentials bancaires', 'Phishing financier', 'T1566.002', 'snort'),
+(87292, 'Spam - Relais spam dÃ©tectÃ©', 'Serveur utilisÃ© spam', 'haute', 25, 'Envoi massif emails', 'Serveur compromis ou mal config', 'T1071.003', 'snort'),
+(87293, 'Spam - Campagne spam', 'Envoi massif dÃ©tectÃ©', 'moyenne', 25, 'Volume anormal emails', 'Campagne spam active', 'T1071.003', 'snort'),
+(87294, 'Phishing - Document malveillant', 'PiÃ¨ce jointe suspecte', 'haute', 25, 'Document macro malveillante', 'Dropper piÃ¨ce jointe', 'T1566.001', 'snort'),
+(87295, 'Phishing - Lien raccourci suspect', 'URL shortener vers malware', 'moyenne', 25, 'Lien bit.ly malveillant', 'Masquage URL malveillante', 'T1566.002', 'snort'),
+(87296, 'Phishing - QR code malveillant', 'QR code vers site frauduleux', 'moyenne', 25, 'Quishing dÃ©tectÃ©', 'QR code phishing', 'T1566.002', 'snort'),
+(87297, 'Phishing - Clone site lÃ©gitime', 'Copie site web dÃ©tectÃ©e', 'haute', 25, 'Site clonÃ© vol credentials', 'Kit phishing utilisÃ©', 'T1566.002', 'snort'),
+(87298, 'Spam - Bounce attack', 'Attaque rebond email', 'moyenne', 25, 'Exploitation bounces', 'Spam via messages erreur', 'T1071.003', 'snort'),
+(87299, 'Phishing - Credential harvesting', 'RÃ©colte credentials', 'critique', 25, 'Formulaire volant identifiants', 'Page capture active', 'T1566.002', 'snort'),
+(87300, 'Phishing - Spear phishing dÃ©tectÃ©', 'Phishing ciblÃ© identifiÃ©', 'critique', 25, 'Attaque ciblÃ©e individu', 'Recherche prÃ©alable victime', 'T1566.001', 'snort');
+
+-- =============================================================================
 -- TABLE: RECOMMANDATIONS
--- ============================================================================
+-- =============================================================================
+
 CREATE TABLE recommandations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     regle_id INTEGER NOT NULL,
-    ordre INTEGER NOT NULL,
+    ordre INTEGER DEFAULT 1,
     action TEXT NOT NULL,
     commande TEXT,
     niveau TEXT CHECK(niveau IN ('debutant', 'intermediaire', 'avance')) DEFAULT 'debutant',
     FOREIGN KEY (regle_id) REFERENCES regles(id)
 );
 
--- Recommandations pour les règles SSH
+-- Recommandations Wazuh
 INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
--- Règle 5711 (Brute force SSH)
-((SELECT id FROM regles WHERE wazuh_rule_id = 5711), 1, 'Bloquer immédiatement l adresse IP source', 'sudo iptables -A INPUT -s IP_ATTAQUANT -j DROP', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 5711), 2, 'Installer et configurer fail2ban', 'sudo apt install fail2ban && sudo systemctl enable fail2ban', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 5711), 3, 'Vérifier les connexions réussies récentes', 'sudo grep "Accepted" /var/log/auth.log | tail -20', 'intermediaire'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 5711), 4, 'Changer le port SSH par défaut', 'sudo nano /etc/ssh/sshd_config # Modifier Port 22', 'avance'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 5710), 1, 'VÃ©rifiez les logs SSH pour identifier la source', 'cat /var/log/auth.log | grep "Failed password" | tail -20', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 5710), 2, 'Identifiez les IP qui tentent de se connecter', 'grep "Failed password" /var/log/auth.log | awk ''{print $11}'' | sort | uniq -c | sort -rn', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 5710), 3, 'Bloquez IP suspecte avec pare-feu', 'sudo ufw deny from IP_SUSPECTE', 'intermediaire'),
 
--- Règle 5701 (Connexion après brute force)
-((SELECT id FROM regles WHERE wazuh_rule_id = 5701), 1, 'URGENT: Vérifier si la connexion est légitime', 'sudo last | head -10', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 5701), 2, 'Changer immédiatement tous les mots de passe', 'sudo passwd NOM_UTILISATEUR', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 5701), 3, 'Vérifier les processus suspects', 'sudo ps aux | grep -v root', 'intermediaire'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 5701), 4, 'Analyser les fichiers modifiés récemment', 'sudo find / -mtime -1 -type f 2>/dev/null', 'avance'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 5711), 1, 'Installez fail2ban pour bloquer automatiquement', 'sudo apt install fail2ban -y', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 5711), 2, 'VÃ©rifiez statut fail2ban', 'sudo systemctl status fail2ban', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 5711), 3, 'Consultez IP bannies', 'sudo fail2ban-client status sshd', 'intermediaire'),
 
--- Règle 5704 (Connexion root)
-((SELECT id FROM regles WHERE wazuh_rule_id = 5704), 1, 'Désactiver la connexion root SSH', 'sudo sed -i "s/PermitRootLogin yes/PermitRootLogin no/" /etc/ssh/sshd_config && sudo systemctl restart sshd', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 5704), 2, 'Utiliser des clés SSH au lieu des mots de passe', 'ssh-keygen -t ed25519', 'intermediaire'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 5712), 1, 'URGENT: Bloquez immÃ©diatement IP attaquante', 'sudo ufw deny from IP_ATTAQUANTE', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 5712), 2, 'Changez mots de passe comptes ciblÃ©s', 'sudo passwd NOM_UTILISATEUR', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 5712), 3, 'DÃ©sactivez auth par mot de passe SSH', 'sudo nano /etc/ssh/sshd_config # PasswordAuthentication no', 'avance'),
 
--- Règle 31101 (Injection SQL)
-((SELECT id FROM regles WHERE wazuh_rule_id = 31101), 1, 'Bloquer l adresse IP source immédiatement', 'sudo iptables -A INPUT -s IP_ATTAQUANT -j DROP', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 31101), 2, 'Vérifier les logs de la base de données', 'sudo tail -100 /var/log/mysql/error.log', 'intermediaire'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 31101), 3, 'Mettre à jour le WAF (ModSecurity)', 'sudo apt update && sudo apt upgrade libapache2-mod-security2', 'avance'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 31101), 4, 'Auditer le code de l application', 'Vérifier l utilisation de requêtes préparées (prepared statements)', 'avance'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 510), 1, 'CRITIQUE: Isolez immÃ©diatement serveur', 'sudo ip link set eth0 down', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 510), 2, 'Lancez scan antirootkit', 'sudo rkhunter --check', 'intermediaire'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 510), 3, 'Analysez processus en cours', 'ps auxf | less', 'intermediaire'),
 
--- Règle 510 (Rootkit détecté)
-((SELECT id FROM regles WHERE wazuh_rule_id = 510), 1, 'ISOLER IMMÉDIATEMENT LE SERVEUR DU RÉSEAU', 'sudo ifconfig eth0 down', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 510), 2, 'Ne pas redémarrer - préserver les preuves', 'Contacter l équipe de sécurité', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 510), 3, 'Scanner avec rkhunter', 'sudo rkhunter --check', 'intermediaire'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 510), 4, 'Préparer une réinstallation complète', 'Le système est probablement compromis', 'avance'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 1004), 1, 'Identifiez source attaque logs web', 'cat /var/log/apache2/access.log | grep -i "union\\|select" | tail -20', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 1004), 2, 'Bloquez IP attaquant', 'sudo ufw deny from IP_ATTAQUANTE', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 1004), 3, 'Activez WAF ModSecurity', 'sudo apt install libapache2-mod-security2 -y', 'avance');
 
--- Règle 4105 (Flood SYN)
-((SELECT id FROM regles WHERE wazuh_rule_id = 4105), 1, 'Activer la protection SYN cookies', 'sudo sysctl -w net.ipv4.tcp_syncookies=1', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 4105), 2, 'Limiter le taux de connexions', 'sudo iptables -A INPUT -p tcp --syn -m limit --limit 1/s -j ACCEPT', 'intermediaire'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 4105), 3, 'Contacter le FAI pour mitigation DDoS', 'Si l attaque persiste', 'avance'),
+-- Recommandations Snort - Scan
+INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
+((SELECT id FROM regles WHERE wazuh_rule_id = 87001), 1, 'Identifiez IP qui scanne votre rÃ©seau', 'cat /var/log/snort/alert | grep "scan" | tail -20', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87001), 2, 'Bloquez IP du scanner', 'sudo ufw deny from IP_SCANNER', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87001), 3, 'VÃ©rifiez ports visÃ©s', 'sudo tcpdump -i any src host IP_SCANNER -n', 'intermediaire'),
 
--- Règle 18111 (Journal effacé)
-((SELECT id FROM regles WHERE wazuh_rule_id = 18111), 1, 'ALERTE CRITIQUE: Possible dissimulation d attaque', 'Investiguer immédiatement', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 18111), 2, 'Vérifier les autres journaux', 'Comparer avec les logs Wazuh centralisés', 'intermediaire'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 18111), 3, 'Identifier qui a effacé les logs', 'Vérifier les accès administrateurs', 'avance'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87009), 1, 'Outil Nmap cible votre serveur', 'cat /var/log/snort/alert | grep -i nmap', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87009), 2, 'Bloquez immÃ©diatement IP source', 'sudo ufw deny from IP_ATTAQUANTE', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87009), 3, 'Analysez ports scannÃ©s', 'grep IP_ATTAQUANTE /var/log/snort/alert', 'intermediaire');
 
--- Règle 99999 (Non identifié)
-((SELECT id FROM regles WHERE wazuh_rule_id = 99999), 1, 'Analyser manuellement le log brut', 'Examiner les détails de l alerte', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 99999), 2, 'Rechercher l ID de règle Wazuh', 'Consulter la documentation Wazuh', 'intermediaire'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 99999), 3, 'Signaler pour ajout à la base SIEM Africa', 'Contribuer à l amélioration du système', 'debutant'),
+-- Recommandations Snort - SQL Injection
+INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
+((SELECT id FROM regles WHERE wazuh_rule_id = 87041), 1, 'CRITIQUE: Attaque SQL injection en cours!', 'VÃ©rifiez immÃ©diatement applications web', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87041), 2, 'Bloquez IP attaquant', 'sudo ufw deny from IP_ATTAQUANTE', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87041), 3, 'Sauvegardez base donnÃ©es', 'mysqldump --all-databases > backup_urgence.sql', 'intermediaire'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87041), 4, 'Utilisez requÃªtes prÃ©parÃ©es', 'Consultez OWASP SQL Injection Prevention', 'avance'),
 
--- Règle 1101 (Connexion IP malveillante)
-((SELECT id FROM regles WHERE wazuh_rule_id = 1101), 1, 'Bloquer l adresse IP immédiatement', 'sudo iptables -A INPUT -s IP_MALVEILLANTE -j DROP && sudo iptables -A OUTPUT -d IP_MALVEILLANTE -j DROP', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 1101), 2, 'Identifier le processus responsable', 'sudo netstat -tulpn | grep IP_MALVEILLANTE', 'intermediaire'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 1101), 3, 'Scanner le système pour malware', 'sudo clamscan -r /', 'avance'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87042), 1, 'Tentative bypass authentification SQL', 'VÃ©rifiez logs serveur web', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87042), 2, 'Bloquez IP source', 'sudo ufw deny from IP_ATTAQUANTE', 'debutant');
 
--- Règle 5113 (Modification sudoers)
-((SELECT id FROM regles WHERE wazuh_rule_id = 5113), 1, 'Vérifier les modifications apportées', 'sudo cat /etc/sudoers', 'debutant'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 5113), 2, 'Restaurer depuis une sauvegarde si suspect', 'sudo cp /etc/sudoers.bak /etc/sudoers', 'intermediaire'),
-((SELECT id FROM regles WHERE wazuh_rule_id = 5113), 3, 'Auditer tous les utilisateurs sudo', 'sudo grep -Po "^sudo.+:\K.*$" /etc/group', 'intermediaire');
+-- Recommandations Snort - XSS
+INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
+((SELECT id FROM regles WHERE wazuh_rule_id = 87076), 1, 'Injection script malveillant dÃ©tectÃ©e', 'VÃ©rifiez logs serveur web', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87076), 2, 'Bloquez IP source attaque', 'sudo ufw deny from IP_ATTAQUANTE', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87076), 3, 'Activez en-tÃªtes sÃ©curitÃ©', 'Ajoutez Content-Security-Policy config web', 'intermediaire'),
 
--- ============================================================================
--- TABLE: ALERTES_LOG (Historique des alertes reçues)
--- ============================================================================
+((SELECT id FROM regles WHERE wazuh_rule_id = 87086), 1, 'CRITIQUE: Vol cookies dÃ©tectÃ©!', 'Invalidez toutes sessions utilisateurs', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87086), 2, 'Bloquez IP attaquant', 'sudo ufw deny from IP_ATTAQUANTE', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87086), 3, 'Activez HttpOnly sur cookies', 'Modifiez config application', 'avance');
+
+-- Recommandations Snort - DDoS
+INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
+((SELECT id FROM regles WHERE wazuh_rule_id = 87111), 1, 'URGENT: Attaque DDoS en cours!', 'Contactez hÃ©bergeur ou FAI immÃ©diatement', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87111), 2, 'Activez SYN cookies', 'echo 1 > /proc/sys/net/ipv4/tcp_syncookies', 'intermediaire'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87111), 3, 'Limitez connexions par IP', 'sudo iptables -A INPUT -p tcp --syn -m limit --limit 1/s -j ACCEPT', 'avance'),
+
+((SELECT id FROM regles WHERE wazuh_rule_id = 87114), 1, 'Attaque HTTP Flood dÃ©tectÃ©e', 'VÃ©rifiez charge serveur web', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87114), 2, 'Activez rate limiting', 'Configurez mod_evasive Apache', 'intermediaire');
+
+-- Recommandations Snort - Backdoors
+INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
+((SELECT id FROM regles WHERE wazuh_rule_id = 87146), 1, 'CRITIQUE: Attaquant a accÃ¨s systÃ¨me!', 'Isolez immÃ©diatement serveur', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87146), 2, 'Identifiez connexions sortantes', 'sudo netstat -tulpn | grep ESTABLISHED', 'intermediaire'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87146), 3, 'Tuez processus suspects', 'sudo kill -9 PID_SUSPECT', 'intermediaire'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87146), 4, 'Analysez fichiers rÃ©cemment modifiÃ©s', 'find / -mtime -1 -type f 2>/dev/null | head -50', 'avance'),
+
+((SELECT id FROM regles WHERE wazuh_rule_id = 87149), 1, 'CRITIQUE: Web shell PHP dÃ©tectÃ©!', 'Identifiez et supprimez fichier', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87149), 2, 'Recherchez fichiers PHP suspects', 'find /var/www -name "*.php" -mtime -7 -type f', 'intermediaire'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87149), 3, 'VÃ©rifiez logs accÃ¨s', 'grep -r "cmd=\\|exec\\|system" /var/log/apache2/', 'intermediaire');
+
+-- Recommandations Snort - Brute Force
+INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
+((SELECT id FROM regles WHERE wazuh_rule_id = 87176), 1, 'Attaque brute force SSH dÃ©tectÃ©e Snort', 'VÃ©rifiez tentatives connexion', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87176), 2, 'Bloquez IP attaquante', 'sudo ufw deny from IP_ATTAQUANTE', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87176), 3, 'Installez fail2ban', 'sudo apt install fail2ban && sudo systemctl enable fail2ban', 'intermediaire'),
+
+((SELECT id FROM regles WHERE wazuh_rule_id = 87181), 1, 'Attaque brute force RDP dÃ©tectÃ©e', 'Limitez accÃ¨s RDP par IP', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87181), 2, 'Activez NLA sur RDP', 'Configurez Network Level Authentication', 'intermediaire');
+
+-- Recommandations Snort - Malware
+INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
+((SELECT id FROM regles WHERE wazuh_rule_id = 87236), 1, 'CRITIQUE: Ransomware! Isolez systÃ¨me!', 'DÃ©branchez cÃ¢ble rÃ©seau physiquement', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87236), 2, 'NE PAYEZ PAS ranÃ§on', 'Contactez autoritÃ©s (police, ANSSI)', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87236), 3, 'Identifiez type ransomware', 'Consultez nomoreransom.org', 'intermediaire'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87236), 4, 'Restaurez depuis sauvegardes', 'Utilisez sauvegardes hors ligne', 'avance'),
+
+((SELECT id FROM regles WHERE wazuh_rule_id = 87240), 1, 'Malware Emotet - Isolez systÃ¨me', 'DÃ©connectez rÃ©seau immÃ©diatement', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87240), 2, 'Changez tous mots de passe', 'Utilisez ordinateur non infectÃ©', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87240), 3, 'Scannez plusieurs antivirus', 'Malwarebytes, ESET Online Scanner', 'intermediaire');
+
+-- Recommandations Snort - Phishing
+INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
+((SELECT id FROM regles WHERE wazuh_rule_id = 87286), 1, 'Lien phishing dÃ©tectÃ© - NE CLIQUEZ PAS', 'Supprimez email ou fermez page', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87286), 2, 'Si cliquÃ©, changez mots de passe', 'Commencez par comptes bancaires et email', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87286), 3, 'Signalez phishing', 'signal-spam.fr ou phishing-initiative.fr', 'intermediaire'),
+
+((SELECT id FROM regles WHERE wazuh_rule_id = 87289), 1, 'CRITIQUE: Faux login Microsoft dÃ©tectÃ©', 'Alertez utilisateurs de ne pas se connecter', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 87289), 2, 'Bloquez domaine malveillant', 'Ajoutez Ã  blacklist DNS', 'intermediaire');
+
+-- Recommandation par dÃ©faut
+INSERT INTO recommandations (regle_id, ordre, action, commande, niveau) VALUES
+((SELECT id FROM regles WHERE wazuh_rule_id = 99999), 1, 'Analysez dÃ©tail alerte dans Wazuh', 'cat /var/ossec/logs/alerts/alerts.json | tail -20', 'debutant'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 99999), 2, 'Recherchez informations rÃ¨gle', 'Consultez documentation Wazuh', 'intermediaire'),
+((SELECT id FROM regles WHERE wazuh_rule_id = 99999), 3, 'Contactez Ã©quipe sÃ©curitÃ© si nÃ©cessaire', 'Escaladez selon procÃ©dure interne', 'debutant');
+
+-- =============================================================================
+-- TABLE: ALERTES_LOG (Historique des alertes)
+-- =============================================================================
+
 CREATE TABLE alertes_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     wazuh_alert_id TEXT,
     wazuh_rule_id INTEGER,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     agent_id TEXT,
     agent_name TEXT,
-    agent_ip TEXT,
     source_ip TEXT,
-    source_port INTEGER,
     dest_ip TEXT,
+    source_port INTEGER,
     dest_port INTEGER,
     protocole TEXT,
     utilisateur TEXT,
-    description_wazuh TEXT,
-    raw_log TEXT,
-    statut TEXT CHECK(statut IN ('nouveau', 'vu', 'en_cours', 'traite', 'ignore', 'faux_positif')) DEFAULT 'nouveau',
+    description_originale TEXT,
+    log_complet TEXT,
+    gravite TEXT,
+    statut TEXT DEFAULT 'nouveau' CHECK(statut IN ('nouveau', 'vu', 'en_cours', 'traite', 'ignore', 'faux_positif')),
+    note TEXT,
     traite_par TEXT,
-    notes TEXT,
+    traite_le DATETIME,
     FOREIGN KEY (wazuh_rule_id) REFERENCES regles(wazuh_rule_id)
 );
 
--- ============================================================================
--- INDEX pour améliorer les performances
--- ============================================================================
-CREATE INDEX idx_regles_wazuh_id ON regles(wazuh_rule_id);
-CREATE INDEX idx_regles_gravite ON regles(gravite);
-CREATE INDEX idx_regles_categorie ON regles(categorie_id);
-CREATE INDEX idx_alertes_timestamp ON alertes_log(timestamp);
-CREATE INDEX idx_alertes_statut ON alertes_log(statut);
-CREATE INDEX idx_alertes_rule ON alertes_log(wazuh_rule_id);
-CREATE INDEX idx_recommandations_regle ON recommandations(regle_id);
+-- =============================================================================
+-- TABLE: UTILISATEURS (Authentification Dashboard)
+-- =============================================================================
 
--- ============================================================================
--- VUE: Alertes avec informations complètes
--- ============================================================================
-CREATE VIEW vue_alertes_completes AS
-SELECT 
-    a.id AS alerte_id,
-    a.timestamp,
-    a.agent_name,
-    a.source_ip,
-    a.statut,
-    r.wazuh_rule_id,
-    r.nom_fr AS nom_alerte,
-    r.description,
-    r.gravite,
-    r.impact,
-    r.cause_probable,
-    c.nom AS categorie,
-    c.icone,
-    c.couleur
-FROM alertes_log a
-LEFT JOIN regles r ON a.wazuh_rule_id = r.wazuh_rule_id
-LEFT JOIN categories c ON r.categorie_id = c.id
-ORDER BY a.timestamp DESC;
-
--- ============================================================================
--- VUE: Statistiques par gravité
--- ============================================================================
-CREATE VIEW vue_stats_gravite AS
-SELECT 
-    gravite,
-    COUNT(*) AS total
-FROM alertes_log a
-JOIN regles r ON a.wazuh_rule_id = r.wazuh_rule_id
-WHERE a.statut NOT IN ('traite', 'ignore', 'faux_positif')
-GROUP BY gravite;
-
--- ============================================================================
--- VUE: Statistiques par catégorie
--- ============================================================================
-CREATE VIEW vue_stats_categorie AS
-SELECT 
-    c.nom AS categorie,
-    c.icone,
-    COUNT(*) AS total
-FROM alertes_log a
-JOIN regles r ON a.wazuh_rule_id = r.wazuh_rule_id
-JOIN categories c ON r.categorie_id = c.id
-WHERE a.statut NOT IN ('traite', 'ignore', 'faux_positif')
-GROUP BY c.id
-ORDER BY total DESC;
-
--- ============================================================================
--- FONCTION: Obtenir la règle ou retourner "non identifié"
--- (Note: SQLite n'a pas de fonctions, ceci est géré dans l'application)
--- ============================================================================
-
--- Message de confirmation
-SELECT '✅ Base de données SIEM Africa créée avec succès!' AS message;
-SELECT COUNT(*) || ' règles insérées' AS info FROM regles;
-SELECT COUNT(*) || ' catégories créées' AS info FROM categories;
-SELECT COUNT(*) || ' recommandations ajoutées' AS info FROM recommandations;
--- ============================================================================
--- TABLE: UTILISATEURS (Authentification)
--- ============================================================================
-CREATE TABLE IF NOT EXISTS utilisateurs (
+CREATE TABLE utilisateurs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    email TEXT,
+    nom_complet TEXT,
+    role TEXT DEFAULT 'analyste' CHECK(role IN ('admin', 'analyste', 'lecteur')),
     must_change_password INTEGER DEFAULT 1,
     password_created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     password_expires_at DATETIME,
     last_login DATETIME,
     failed_attempts INTEGER DEFAULT 0,
     locked_until DATETIME,
-    password_history TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    actif INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- TABLE: SESSIONS (Gestion des sessions)
--- ============================================================================
-CREATE TABLE IF NOT EXISTS sessions (
+-- =============================================================================
+-- TABLE: SESSIONS
+-- =============================================================================
+
+CREATE TABLE sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     session_token TEXT UNIQUE NOT NULL,
@@ -547,36 +723,149 @@ CREATE TABLE IF NOT EXISTS sessions (
     FOREIGN KEY (user_id) REFERENCES utilisateurs(id)
 );
 
--- ============================================================================
--- TABLE: AUDIT_LOG (Journal des connexions)
--- ============================================================================
-CREATE TABLE IF NOT EXISTS audit_log (
+-- =============================================================================
+-- TABLE: AUDIT_LOG
+-- =============================================================================
+
+CREATE TABLE audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id INTEGER,
     username TEXT,
-    action TEXT,
-    ip_address TEXT,
+    action TEXT NOT NULL,
     details TEXT,
-    success INTEGER
+    ip_address TEXT,
+    user_agent TEXT,
+    success INTEGER DEFAULT 1,
+    FOREIGN KEY (user_id) REFERENCES utilisateurs(id)
 );
 
--- ============================================================================
--- UTILISATEUR PAR DÉFAUT (admin / SiemAfrica2026!)
--- Le hash correspond à "SiemAfrica2026!" avec SHA256
--- ============================================================================
-INSERT OR IGNORE INTO utilisateurs (
-    username, 
-    password_hash, 
-    must_change_password, 
-    password_expires_at
-) VALUES (
-    'admin',
-    'a]2fd424d6b6a7e1c4a8c8e8f7e6d5c4b3a29181726354453627181909876543210',
-    1,
-    datetime('now', '+90 days')
-);
+-- =============================================================================
+-- INDEX POUR PERFORMANCES
+-- =============================================================================
 
--- Index pour les performances
-CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
-CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
+CREATE INDEX idx_regles_wazuh_rule_id ON regles(wazuh_rule_id);
+CREATE INDEX idx_regles_categorie ON regles(categorie_id);
+CREATE INDEX idx_regles_gravite ON regles(gravite);
+CREATE INDEX idx_regles_source ON regles(source);
+CREATE INDEX idx_alertes_timestamp ON alertes_log(timestamp);
+CREATE INDEX idx_alertes_wazuh_rule ON alertes_log(wazuh_rule_id);
+CREATE INDEX idx_alertes_statut ON alertes_log(statut);
+CREATE INDEX idx_alertes_gravite ON alertes_log(gravite);
+CREATE INDEX idx_alertes_source_ip ON alertes_log(source_ip);
+CREATE INDEX idx_sessions_token ON sessions(session_token);
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+CREATE INDEX idx_audit_timestamp ON audit_log(timestamp);
+CREATE INDEX idx_recommandations_regle ON recommandations(regle_id);
+
+-- =============================================================================
+-- VUES UTILES
+-- =============================================================================
+
+-- Vue: Alertes complÃ¨tes avec traduction
+CREATE VIEW vue_alertes_completes AS
+SELECT 
+    a.id,
+    a.timestamp,
+    a.wazuh_alert_id,
+    a.wazuh_rule_id,
+    r.nom_fr AS nom_alerte,
+    r.description AS description_fr,
+    r.gravite,
+    r.impact,
+    r.cause_probable,
+    r.mitre_id,
+    r.source AS source_regle,
+    c.nom AS categorie,
+    c.icone,
+    c.couleur,
+    a.agent_id,
+    a.agent_name,
+    a.source_ip,
+    a.dest_ip,
+    a.source_port,
+    a.dest_port,
+    a.protocole,
+    a.utilisateur,
+    a.description_originale,
+    a.statut,
+    a.note
+FROM alertes_log a
+LEFT JOIN regles r ON a.wazuh_rule_id = r.wazuh_rule_id
+LEFT JOIN categories c ON r.categorie_id = c.id;
+
+-- Vue: Statistiques par gravitÃ©
+CREATE VIEW vue_stats_gravite AS
+SELECT 
+    gravite,
+    COUNT(*) AS total,
+    SUM(CASE WHEN statut = 'nouveau' THEN 1 ELSE 0 END) AS non_traites
+FROM alertes_log
+WHERE timestamp >= datetime('now', '-24 hours')
+GROUP BY gravite;
+
+-- Vue: Statistiques par catÃ©gorie
+CREATE VIEW vue_stats_categorie AS
+SELECT 
+    c.nom AS categorie,
+    c.icone,
+    r.source,
+    COUNT(a.id) AS total
+FROM alertes_log a
+LEFT JOIN regles r ON a.wazuh_rule_id = r.wazuh_rule_id
+LEFT JOIN categories c ON r.categorie_id = c.id
+WHERE a.timestamp >= datetime('now', '-7 days')
+GROUP BY c.id, r.source
+ORDER BY total DESC;
+
+-- Vue: Top IP sources
+CREATE VIEW vue_top_ip_sources AS
+SELECT 
+    source_ip,
+    COUNT(*) AS total,
+    MAX(timestamp) AS derniere_alerte
+FROM alertes_log
+WHERE source_ip IS NOT NULL 
+  AND source_ip != ''
+  AND timestamp >= datetime('now', '-24 hours')
+GROUP BY source_ip
+ORDER BY total DESC
+LIMIT 10;
+
+-- Vue: RÃ©sumÃ© des rÃ¨gles par source
+CREATE VIEW vue_regles_par_source AS
+SELECT 
+    source,
+    COUNT(*) AS total_regles,
+    SUM(CASE WHEN gravite = 'critique' THEN 1 ELSE 0 END) AS critiques,
+    SUM(CASE WHEN gravite = 'haute' THEN 1 ELSE 0 END) AS hautes,
+    SUM(CASE WHEN gravite = 'moyenne' THEN 1 ELSE 0 END) AS moyennes,
+    SUM(CASE WHEN gravite = 'faible' THEN 1 ELSE 0 END) AS faibles,
+    SUM(CASE WHEN gravite = 'info' THEN 1 ELSE 0 END) AS infos
+FROM regles
+GROUP BY source;
+
+-- =============================================================================
+-- VÃ‰RIFICATION FINALE
+-- =============================================================================
+
+SELECT 'âœ… Base de donnÃ©es SIEM Africa crÃ©Ã©e avec succÃ¨s!' AS message;
+SELECT 'Total rÃ¨gles: ' || COUNT(*) FROM regles;
+SELECT 'RÃ¨gles Wazuh: ' || COUNT(*) FROM regles WHERE source = 'wazuh';
+SELECT 'RÃ¨gles Snort: ' || COUNT(*) FROM regles WHERE source = 'snort';
+SELECT 'CatÃ©gories: ' || COUNT(*) FROM categories;
+SELECT 'Recommandations: ' || COUNT(*) FROM recommandations;
+
+-- =============================================================================
+-- FIN DU SCRIPT SQL - SIEM AFRICA v2.0
+-- =============================================================================
+-- 
+-- RÃ©sumÃ©:
+-- - 25 catÃ©gories d'alertes
+-- - 207 rÃ¨gles Wazuh traduites en franÃ§ais
+-- - 300 rÃ¨gles Snort traduites en franÃ§ais
+-- - 507 rÃ¨gles au total
+-- - Recommandations adaptÃ©es aux dÃ©butants
+--
+-- Projet: SIEM Africa - 
+-- =============================================================================
